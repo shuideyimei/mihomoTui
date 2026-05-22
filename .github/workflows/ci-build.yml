@@ -1,0 +1,66 @@
+name: CI - Build Check
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  APP_NAME: "mihomoTui"
+
+jobs:
+  build:
+    name: Build matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ${{ github.workspace }}/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Download modules
+      run: go mod download
+
+    - name: Build (cross-compile)
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CGO_ENABLED: 0
+      run: |
+        echo "Building for $GOOS/$GOARCH"
+        mkdir -p build
+        if [ "$GOOS" = "windows" ]; then
+          BINARY_NAME="${{ env.APP_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}.exe"
+        else
+          BINARY_NAME="${{ env.APP_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+        fi
+        go build -v -o "build/${BINARY_NAME}" .
+
+    - name: Verify binary exists
+      run: |
+        ls -l build || true
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          EXPECT="build/${{ env.APP_NAME }}-windows-amd64.exe"
+        else
+          EXPECT="build/${{ env.APP_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+        fi
+        test -f "$EXPECT" || (echo "Expected $EXPECT not found" && exit 1)

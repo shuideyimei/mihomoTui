@@ -1,0 +1,131 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  APP_NAME: "mihomoTui"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: ""
+          - goos: linux
+            goarch: arm64
+            suffix: ""
+          - goos: darwin
+            goarch: amd64
+            suffix: ""
+          - goos: darwin
+            goarch: arm64
+            suffix: ""
+          - goos: windows
+            goarch: amd64
+            suffix: ".exe"
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
+
+    - name: Get version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "APP_VERSION=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Version: ${VERSION}"
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CGO_ENABLED: 0
+      run: |
+        mkdir -p dist
+        BINARY_NAME="${{ env.APP_NAME }}-${{ steps.version.outputs.APP_VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}"
+        go build -ldflags "-X main.appName=${{ env.APP_NAME }} -X main.appVersion=${{ steps.version.outputs.APP_VERSION }}" -o "dist/${BINARY_NAME}" .
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.APP_NAME }}-${{ steps.version.outputs.APP_VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: dist/${{ env.APP_NAME }}-${{ steps.version.outputs.APP_VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Get version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "APP_VERSION=${VERSION}" >> $GITHUB_OUTPUT
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get last tag
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        if [ -z "$PREVIOUS_TAG" ]; then
+          # If there is no previous tag, get all commits
+          CHANGELOG=$(git log --oneline --format="- %s (%h)")
+        else
+          # Get commits from last tag to current
+          CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --oneline --format="- %s (%h)")
+        fi
+
+        # Convert newlines to a format that GitHub Actions can process
+        CHANGELOG="${CHANGELOG//'%'/'%25'}"
+        CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
+        CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
+        
+        echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
+
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.APP_VERSION }}
+        name: Release ${{ steps.version.outputs.APP_VERSION }}
+        body: |
+          ## mihomoTui ${{ steps.version.outputs.APP_VERSION }}
+
+          ### 🎉 Updates
+          ${{ steps.changelog.outputs.changelog }}
+
+          ### 📦 Download Links
+          - Linux AMD64: [mihomoTui-${{ steps.version.outputs.APP_VERSION }}-linux-amd64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.APP_VERSION }}/mihomoTui-${{ steps.version.outputs.APP_VERSION }}-linux-amd64)
+          - Linux ARM64: [mihomoTui-${{ steps.version.outputs.APP_VERSION }}-linux-arm64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.APP_VERSION }}/mihomoTui-${{ steps.version.outputs.APP_VERSION }}-linux-arm64)
+          - macOS AMD64: [mihomoTui-${{ steps.version.outputs.APP_VERSION }}-darwin-amd64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.APP_VERSION }}/mihomoTui-${{ steps.version.outputs.APP_VERSION }}-darwin-amd64)
+          - macOS ARM64: [mihomoTui-${{ steps.version.outputs.APP_VERSION }}-darwin-arm64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.APP_VERSION }}/mihomoTui-${{ steps.version.outputs.APP_VERSION }}-darwin-arm64)
+          - Windows AMD64: [mihomoTui-${{ steps.version.outputs.APP_VERSION }}-windows-amd64.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.APP_VERSION }}/mihomoTui-${{ steps.version.outputs.APP_VERSION }}-windows-amd64.exe)
+        files: artifacts/**/*
+        draft: false
+        prerelease: ${{ contains(steps.version.outputs.APP_VERSION, 'alpha') || contains(steps.version.outputs.APP_VERSION, 'beta') || contains(steps.version.outputs.APP_VERSION, 'rc') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

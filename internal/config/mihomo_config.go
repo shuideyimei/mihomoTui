@@ -13,7 +13,7 @@ import (
 
 // configMu protects all config file read+modify+write cycles against
 // concurrent access from different pages (rules, rule-providers, proxy-groups).
-var configMu sync.Mutex
+var configMu sync.RWMutex
 
 // proxy-group types
 const (
@@ -66,19 +66,22 @@ type ProviderInfo struct {
 func GetMihomoProxyProviders() ([]ProviderInfo, error) {
 	configPath := FindMihomoConfigPath()
 	if configPath == "" {
-		return nil, nil
+		return nil, fmt.Errorf("找不到 mihomo 配置文件")
 	}
+
+	configMu.RLock()
+	defer configMu.RUnlock()
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
 	var cfg struct {
 		ProxyProviders map[string]ProxyProviderEntry `yaml:"proxy-providers"`
 	}
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
 	var providers []ProviderInfo
@@ -192,28 +195,44 @@ func findMihomoProcessConfig() []string {
 	return paths
 }
 
-// writeConfig writes the YAML document to the config file with sudo + ownership preservation
+// writeConfig writes the YAML document to the config file with sudo + ownership + permissions preservation
 func writeConfig(doc *yaml.Node, configPath string) error {
 	out, err := yaml.Marshal(doc)
 	if err != nil {
 		return fmt.Errorf("序列化配置失败: %w", err)
 	}
 
-	tmpFile := "/tmp/mihomo_config_temp.yaml"
-	if err := os.WriteFile(tmpFile, out, 0644); err != nil {
+	tmpFile, err := os.CreateTemp("", "mihomo_config_*.yaml")
+	if err != nil {
+		return fmt.Errorf("创建临时文件失败: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpPath)
+
+	if err := os.WriteFile(tmpPath, out, 0644); err != nil {
 		return fmt.Errorf("写入临时文件失败: %w", err)
 	}
 
-	origStat, _ := os.Stat(configPath)
+	origStat, statErr := os.Stat(configPath)
 
-	cmd := exec.Command("sudo", "cp", tmpFile, configPath)
+	cmd := exec.Command("sudo", "cp", tmpPath, configPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("写入配置文件失败 (需要 sudo 权限): %s", string(output))
 	}
 
-	if origStat != nil {
+	// Restore original ownership and permissions if the file existed before
+	if statErr == nil && origStat != nil {
+		// Restore ownership (user:group)
 		if st, ok := origStat.Sys().(*syscall.Stat_t); ok {
-			exec.Command("sudo", "chown", fmt.Sprintf("%d:%d", st.Uid, st.Gid), configPath).Run()
+			if chownErr := exec.Command("sudo", "chown", fmt.Sprintf("%d:%d", st.Uid, st.Gid), configPath).Run(); chownErr != nil {
+				return fmt.Errorf("恢复文件所有权失败: %w", chownErr)
+			}
+		}
+		// Restore file permissions (e.g., 0644) — sudo cp with default umask may change them
+		perm := fmt.Sprintf("%o", origStat.Mode().Perm())
+		if chmodErr := exec.Command("sudo", "chmod", perm, configPath).Run(); chmodErr != nil {
+			return fmt.Errorf("恢复文件权限失败: %w", chmodErr)
 		}
 	}
 	return nil
@@ -253,6 +272,9 @@ func GetProxyGroupsFromConfig() ([]string, error) {
 	if configPath == "" {
 		return nil, fmt.Errorf("找不到 mihomo 配置文件")
 	}
+
+	configMu.RLock()
+	defer configMu.RUnlock()
 
 	doc, err := parseConfig(configPath)
 	if err != nil {
@@ -508,6 +530,9 @@ func GetAllProxyGroupsFromConfig() ([]ProxyGroupEntry, error) {
 	if configPath == "" {
 		return nil, fmt.Errorf("找不到 mihomo 配置文件")
 	}
+
+	configMu.RLock()
+	defer configMu.RUnlock()
 
 	doc, err := parseConfig(configPath)
 	if err != nil {
@@ -859,6 +884,9 @@ func GetRuleProvidersFromConfig() ([]RuleProviderEntry, error) {
 		return nil, fmt.Errorf("找不到 mihomo 配置文件")
 	}
 
+	configMu.RLock()
+	defer configMu.RUnlock()
+
 	doc, err := parseConfig(configPath)
 	if err != nil {
 		return nil, err
@@ -1106,6 +1134,11 @@ func formatRuleLine(ruleType, payload, proxy string) string {
 	return fmt.Sprintf("%s,%s,%s", ruleType, payload, proxy)
 }
 
+// FormatRuleLine is the exported version of formatRuleLine.
+func FormatRuleLine(ruleType, payload, proxy string) string {
+	return formatRuleLine(ruleType, payload, proxy)
+}
+
 // RuleEntry is a single rule to be added in batch.
 type RuleEntry struct {
 	Type    string
@@ -1114,6 +1147,7 @@ type RuleEntry struct {
 }
 
 // BatchAddRulesToConfig adds multiple rules in a single read-modify-write cycle.
+// Duplicate rules (identical line) are silently skipped to prevent config bloat.
 func BatchAddRulesToConfig(rules []RuleEntry) (configPath string, err error) {
 	configMu.Lock()
 	defer configMu.Unlock()
@@ -1149,11 +1183,21 @@ func BatchAddRulesToConfig(rules []RuleEntry) (configPath string, err error) {
 		}
 	}
 
+	// Build a set of existing rule lines for dedup
+	existing := make(map[string]struct{}, len(rulesList.Content))
+	for _, item := range rulesList.Content {
+		existing[item.Value] = struct{}{}
+	}
+
 	for _, rule := range rules {
 		ruleLine := formatRuleLine(rule.Type, rule.Payload, rule.Proxy)
+		if _, dup := existing[ruleLine]; dup {
+			continue // skip duplicate
+		}
 		rulesList.Content = append(rulesList.Content,
 			&yaml.Node{Kind: yaml.ScalarNode, Value: ruleLine, Tag: "!!str"},
 		)
+		existing[ruleLine] = struct{}{}
 	}
 
 	if err := writeConfig(doc, configPath); err != nil {
@@ -1253,6 +1297,9 @@ func GetGroupDef(groupName string) (proxies []string, use []string, err error) {
 		return nil, nil, fmt.Errorf("找不到 mihomo 配置文件")
 	}
 
+	configMu.RLock()
+	defer configMu.RUnlock()
+
 	doc, err := parseConfig(configPath)
 	if err != nil {
 		return nil, nil, err
@@ -1315,6 +1362,9 @@ func GetRulesFromConfig() ([]string, error) {
 	if configPath == "" {
 		return nil, fmt.Errorf("找不到 mihomo 配置文件")
 	}
+
+	configMu.RLock()
+	defer configMu.RUnlock()
 
 	doc, err := parseConfig(configPath)
 	if err != nil {
@@ -1426,6 +1476,168 @@ func DeleteRuleFromConfig(index int) (configPath string, err error) {
 	return configPath, nil
 }
 
+// DeleteRuleByContent finds a rule by its type/payload/proxy content and deletes it
+// from the config file. Returns the config path on success.
+// Uses case-insensitive comparison to handle API (PascalCase) vs config (UPPERCASE) differences.
+func DeleteRuleByContent(ruleType, payload, proxy string) (configPath string, err error) {
+	configMu.Lock()
+	defer configMu.Unlock()
+
+	configPath = FindMihomoConfigPath()
+	if configPath == "" {
+		return "", fmt.Errorf("找不到 mihomo 配置文件")
+	}
+
+	doc, err := parseConfig(configPath)
+	if err != nil {
+		return "", err
+	}
+
+	root := doc.Content[0]
+	indices := findKeysInMapping(root, "rules")
+	rulesIdx, ok := indices["rules"]
+	if !ok {
+		return "", fmt.Errorf("配置文件中没有 rules 字段")
+	}
+
+	rulesList := root.Content[rulesIdx+1]
+	if rulesList.Kind != yaml.SequenceNode {
+		return "", fmt.Errorf("rules 格式错误")
+	}
+
+	target := formatRuleLine(ruleType, payload, proxy)
+	targetUpper := strings.ToUpper(target)
+	found := -1
+	for i, item := range rulesList.Content {
+		if strings.ToUpper(item.Value) == targetUpper {
+			found = i
+			break
+		}
+	}
+
+	if found < 0 {
+		return "", fmt.Errorf("未找到匹配的规则: %s", target)
+	}
+
+	rulesList.Content = append(rulesList.Content[:found], rulesList.Content[found+1:]...)
+
+	if err := writeConfig(doc, configPath); err != nil {
+		return "", err
+	}
+
+	return configPath, nil
+}
+
+// MoveRuleToPosition removes the rule at fromIdx and inserts it at toIdx,
+// shifting all intervening rules. This supports arbitrary repositioning:
+//   - toIdx < fromIdx: move up (insert before current position)
+//   - toIdx > fromIdx: move down (insert after current position)
+func MoveRuleToPosition(fromIdx, toIdx int) (configPath string, err error) {
+	configMu.Lock()
+	defer configMu.Unlock()
+
+	configPath = FindMihomoConfigPath()
+	if configPath == "" {
+		return "", fmt.Errorf("找不到 mihomo 配置文件")
+	}
+
+	doc, err := parseConfig(configPath)
+	if err != nil {
+		return "", err
+	}
+
+	root := doc.Content[0]
+	indices := findKeysInMapping(root, "rules")
+	rulesIdx, ok := indices["rules"]
+	if !ok {
+		return "", fmt.Errorf("配置文件中没有 rules 字段")
+	}
+
+	rulesList := root.Content[rulesIdx+1]
+	if rulesList.Kind != yaml.SequenceNode {
+		return "", fmt.Errorf("rules 格式错误")
+	}
+
+	n := len(rulesList.Content)
+	if fromIdx < 0 || fromIdx >= n {
+		return "", fmt.Errorf("来源索引 %d 超出范围 (0-%d)", fromIdx, n-1)
+	}
+	if toIdx < 0 || toIdx >= n {
+		return "", fmt.Errorf("目标索引 %d 超出范围 (0-%d)", toIdx, n-1)
+	}
+	if fromIdx == toIdx {
+		return configPath, nil // no-op
+	}
+
+	// Remove the rule at fromIdx
+	rule := rulesList.Content[fromIdx]
+	rulesList.Content = append(rulesList.Content[:fromIdx], rulesList.Content[fromIdx+1:]...)
+
+	// Adjust toIdx after removal
+	adjustedTo := toIdx
+	if toIdx > fromIdx {
+		adjustedTo = toIdx - 1
+	}
+
+	// Insert at adjusted position
+	// grow slice then shift
+	rulesList.Content = append(rulesList.Content, nil)
+	copy(rulesList.Content[adjustedTo+1:], rulesList.Content[adjustedTo:])
+	rulesList.Content[adjustedTo] = rule
+
+	if err := writeConfig(doc, configPath); err != nil {
+		return "", err
+	}
+
+	return configPath, nil
+}
+
+// MoveRuleInConfig swaps the rules at two indices, effectively moving ruleIdx to targetIdx.
+// For move-up: targetIdx = ruleIdx - 1
+// For move-down: targetIdx = ruleIdx + 1
+func MoveRuleInConfig(ruleIdx, targetIdx int) (configPath string, err error) {
+	configMu.Lock()
+	defer configMu.Unlock()
+
+	configPath = FindMihomoConfigPath()
+	if configPath == "" {
+		return "", fmt.Errorf("找不到 mihomo 配置文件")
+	}
+
+	doc, err := parseConfig(configPath)
+	if err != nil {
+		return "", err
+	}
+
+	root := doc.Content[0]
+	indices := findKeysInMapping(root, "rules")
+	rulesIdx, ok := indices["rules"]
+	if !ok {
+		return "", fmt.Errorf("配置文件中没有 rules 字段")
+	}
+
+	rulesList := root.Content[rulesIdx+1]
+	if rulesList.Kind != yaml.SequenceNode {
+		return "", fmt.Errorf("rules 格式错误")
+	}
+
+	if ruleIdx < 0 || ruleIdx >= len(rulesList.Content) {
+		return "", fmt.Errorf("规则索引 %d 超出范围", ruleIdx)
+	}
+	if targetIdx < 0 || targetIdx >= len(rulesList.Content) {
+		return "", fmt.Errorf("目标索引 %d 超出范围", targetIdx)
+	}
+
+	// Swap the two rule nodes in-place
+	rulesList.Content[ruleIdx], rulesList.Content[targetIdx] = rulesList.Content[targetIdx], rulesList.Content[ruleIdx]
+
+	if err := writeConfig(doc, configPath); err != nil {
+		return "", err
+	}
+
+	return configPath, nil
+}
+
 // UpdateRuleInConfig updates a rule at the given index
 func UpdateRuleInConfig(index int, ruleType, payload, proxy string) (configPath string, err error) {
 	configMu.Lock()
@@ -1466,3 +1678,5 @@ func UpdateRuleInConfig(index int, ruleType, payload, proxy string) (configPath 
 
 	return configPath, nil
 }
+
+

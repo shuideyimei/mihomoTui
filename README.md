@@ -18,7 +18,7 @@ English | [简体中文](README_ZH.md)
 - 🌐 **Proxy Management** — Browse and switch proxy nodes and proxy groups in real time
 - ⚙️ **Configuration Control** — Toggle TUN mode, Allow LAN, and proxy mode on the fly
 - 📊 **Real-time Monitoring** — Live traffic statistics (upload/download speed), memory usage, and active connection count
-- 📋 **Rule Management** — View, add, edit, delete, and batch-import proxy rules and RULE-SET rules
+- 📋 **Rule Management** — View, add, edit, delete, reorder, and batch-import proxy rules and RULE-SET rules
 - 🔖 **Rule Providers** — Add, update, and delete rule-provider subscriptions (HTTP/local)
 - 📥 **Subscription Management** — Import proxy subscriptions from URL or local file, merge into your existing config
 - 📦 **Proxy Group Management** — Create, update, and delete custom proxy groups with types: `select`, `url-test`, `fallback`, `load-balance`
@@ -180,7 +180,7 @@ mihomoTui/
 | 5 | **Logs**         | Real-time log streaming with pause/resume and level filtering |
 | 6 | **Subscriptions**| Import proxy subscriptions from URL or file, merge into config |
 | 7 | **Proxy Groups** | Create, update, delete custom proxy groups |
-| 8 | **Rules**        | View, add, edit, delete, bulk-import proxy rules |
+| 8 | **Rules**        | View, add, edit, delete, reorder (↑/↓/move-to), bulk-import proxy rules |
 | 9 | **Rule Providers** | Add, update, delete rule-provider subscriptions |
 
 ## Keyboard Shortcuts
@@ -199,6 +199,20 @@ mihomoTui/
 | `Alt+D` / `Alt+P` / `Alt+R` / `Alt+C` / `Alt+L` / `Alt+S` / `Alt+G` | Switch to page by letter |
 | `Tab` / `Shift+Tab` | Cycle focus between controls |
 | `Ctrl+R`        | Refresh current page data  |
+
+### Rules Page Shortcuts
+
+| Key              | Action                     |
+|------------------|----------------------------|
+| `A`             | Add rule                   |
+| `D`             | Delete selected rule       |
+| `R`             | Refresh rules              |
+| `P`             | Paste import rules         |
+| `M`             | Move selected rule to position |
+| `↑`/`↓`        | Navigate rule list         |
+| `Alt+↑`         | Move selected rule up      |
+| `Alt+↓`         | Move selected rule down    |
+| `/`             | Focus search filter        |
 
 > Mouse navigation is also fully supported — click sidebar items, buttons, and table cells.
 

@@ -112,7 +112,7 @@ func (m *Manager) Save() error {
 	}
 
 	// Write to file
-	if err := os.WriteFile(m.configPath, data, 0644); err != nil {
+	if err := os.WriteFile(m.configPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -124,8 +124,14 @@ func (m *Manager) Get() *AppConfig {
 	return m.config
 }
 
-// Set updates the configuration
-func (m *Manager) Set(config *AppConfig) {
+// Set updates the configuration and persists to disk
+func (m *Manager) Set(config *AppConfig) error {
+	m.config = config
+	return m.Save()
+}
+
+// SetInMemory updates the configuration in memory without persisting to disk.
+func (m *Manager) SetInMemory(config *AppConfig) {
 	m.config = config
 }
 
@@ -162,7 +168,7 @@ func (m *Manager) Backup() error {
 	}
 
 	// Write backup
-	if err := os.WriteFile(backupPath, data, 0644); err != nil {
+	if err := os.WriteFile(backupPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write backup: %w", err)
 	}
 
@@ -216,7 +222,7 @@ func (m *Manager) Export(path string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write export file: %w", err)
 	}
 

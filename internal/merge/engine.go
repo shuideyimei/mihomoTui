@@ -361,6 +361,30 @@ func mergeProxyProviders(base, overlay []map[string]interface{}, mode types.Merg
 	}
 }
 
+// deepMergeMap recursively merges overlay into base for map[string]interface{} values.
+// Scalar values from overlay override base. Nested maps are merged recursively.
+func deepMergeMap(base, overlay map[string]interface{}) map[string]interface{} {
+	if base == nil {
+		return overlay
+	}
+	if overlay == nil {
+		return base
+	}
+	result := cloneMap(base)
+	for k, v := range overlay {
+		if existing, ok := result[k]; ok {
+			if existingMap, eok := existing.(map[string]interface{}); eok {
+				if overlayMap, ook := v.(map[string]interface{}); ook {
+					result[k] = deepMergeMap(existingMap, overlayMap)
+					continue
+				}
+			}
+		}
+		result[k] = v
+	}
+	return result
+}
+
 func mergeDNS(base, overlay map[string]interface{}, mode types.MergeMode, conflicts *[]types.ConflictEntry) map[string]interface{} {
 	switch mode {
 	case types.MergeModeMerge:
@@ -370,11 +394,7 @@ func mergeDNS(base, overlay map[string]interface{}, mode types.MergeMode, confli
 		if base == nil {
 			return overlay
 		}
-		merged := cloneMap(base)
-		for k, v := range overlay {
-			merged[k] = v
-		}
-		return merged
+		return deepMergeMap(base, overlay)
 	default:
 		if base != nil {
 			return cloneMap(base)
@@ -389,25 +409,25 @@ func mergeTun(base, overlay map[string]interface{}, mode types.MergeMode, confli
 
 // mergeScalars fills in scalar fields from overlay only if not set in base.
 func mergeScalars(base, overlay, result *types.ConfigDocument) {
-	if result.Port == 0 && overlay.Port != 0 {
+	if !result.SetFields["port"] && overlay.Port != 0 {
 		result.Port = overlay.Port
 	}
-	if result.SocksPort == 0 && overlay.SocksPort != 0 {
+	if !result.SetFields["socks-port"] && overlay.SocksPort != 0 {
 		result.SocksPort = overlay.SocksPort
 	}
-	if result.MixedPort == 0 && overlay.MixedPort != 0 {
+	if !result.SetFields["mixed-port"] && overlay.MixedPort != 0 {
 		result.MixedPort = overlay.MixedPort
 	}
-	if result.ExternalUI == "" && overlay.ExternalUI != "" {
+	if !result.SetFields["external-ui"] && overlay.ExternalUI != "" {
 		result.ExternalUI = overlay.ExternalUI
 	}
-	if result.Mode == "" && overlay.Mode != "" {
+	if !result.SetFields["mode"] && overlay.Mode != "" {
 		result.Mode = overlay.Mode
 	}
-	if result.LogLevel == "" && overlay.LogLevel != "" {
+	if !result.SetFields["log-level"] && overlay.LogLevel != "" {
 		result.LogLevel = overlay.LogLevel
 	}
-	if result.Secret == "" && overlay.Secret != "" {
+	if !result.SetFields["secret"] && overlay.Secret != "" {
 		result.Secret = overlay.Secret
 	}
 }

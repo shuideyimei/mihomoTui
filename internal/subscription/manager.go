@@ -66,6 +66,9 @@ func (m *Manager) downloadWithRetry(ctx context.Context, subURL string, extraHea
 	for attempt := 0; attempt <= maxRetry; attempt++ {
 		if attempt > 0 {
 			wait := time.Duration(1<<(attempt-1)) * time.Second
+			if wait > 30*time.Second {
+				wait = 30 * time.Second
+			}
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -88,7 +91,7 @@ func (m *Manager) downloadWithRetry(ctx context.Context, subURL string, extraHea
 			continue
 		}
 
-		if resp.StatusCode >= 500 {
+		if resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests {
 			resp.Body.Close()
 			lastErr = fmt.Errorf("服务器错误 HTTP %d", resp.StatusCode)
 			continue

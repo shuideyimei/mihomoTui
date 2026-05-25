@@ -4,6 +4,23 @@ import "github.com/gdamore/tcell/v2"
 
 // handleGlobalKeys handles global keyboard shortcuts
 func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
+	if event.Rune() == '?' {
+		if a.showingHelp {
+			a.rootPages.HidePage("help")
+			a.showingHelp = false
+		} else {
+			a.rootPages.ShowPage("help")
+			a.showingHelp = true
+		}
+		return nil
+	}
+
+	if event.Key() == tcell.KeyEscape && a.showingHelp {
+		a.rootPages.HidePage("help")
+		a.showingHelp = false
+		return nil
+	}
+
 	// Handle Escape key to return to sidebar (only when not on sidebar)
 	if event.Key() == tcell.KeyEscape && !a.focusOnSidebar {
 		a.setFocus(true)
@@ -36,6 +53,18 @@ func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 	case tcell.KeyF7:
 		a.switchPage(6) // Proxy Groups
 		return nil
+	case tcell.KeyF8:
+		a.switchPage(7) // Rules
+		return nil
+	case tcell.KeyF9:
+		a.switchPage(8) // Rule Providers
+		return nil
+	case tcell.KeyF10:
+		a.switchPage(9) // Settings
+		return nil
+	case tcell.KeyF11:
+		a.switchPage(10)
+		return nil
 	}
 
 	// Handle Ctrl + number keys and Ctrl+Q
@@ -61,6 +90,15 @@ func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 			return nil
 		case '7':
 			a.switchPage(6) // Ctrl+7: Proxy Groups
+			return nil
+		case '8':
+			a.switchPage(7) // Ctrl+8: Rules
+			return nil
+		case '9':
+			a.switchPage(8) // Ctrl+9: Rule Providers
+			return nil
+		case '0':
+			a.switchPage(9) // Ctrl+0: Settings
 			return nil
 		case 'q', 'Q':
 			a.Stop() // Ctrl+Q: Quit
@@ -91,6 +129,18 @@ func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 			return nil
 		case 'g', 'G':
 			a.switchPage(6) // Alt+G: Proxy Groups
+			return nil
+		case 'u', 'U':
+			a.switchPage(7) // Alt+U: Rules
+			return nil
+		case 't', 'T':
+			a.switchPage(8) // Alt+T: Rule Providers
+			return nil
+		case 'k', 'K':
+			a.switchPage(9) // Alt+K: Settings
+			return nil
+		case 'm', 'M':
+			a.switchPage(10) // Alt+M: Config Manager
 			return nil
 		}
 	}

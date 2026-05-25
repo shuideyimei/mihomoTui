@@ -3,9 +3,11 @@ package pages
 import (
 	"fmt"
 	"log"
+	"strconv"
 
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
 
 	"github.com/rivo/tview"
@@ -38,10 +40,12 @@ type ConfigPage struct {
 	statusText *tview.TextView
 
 	// Labels
-	labels []string
+	labels     []string
+	portLabels []string
 
 	// Current config values
 	currentConfig *config.AppConfig
+	mihomoConfig  *models.Config
 }
 
 // NewConfigPage creates a new configuration page
@@ -53,6 +57,7 @@ func NewConfigPage(configManager *config.Manager) *ConfigPage {
 		statusText:    tview.NewTextView(),
 		currentConfig: configManager.Get(),
 		labels:        []string{"API地址", "API密钥"},
+		portLabels:    []string{"HTTP端口", "SOCKS端口", "混合端口"},
 	}
 
 	page.setupUI()
@@ -85,6 +90,15 @@ func (c *ConfigPage) setUpFormItems() {
 		c.form.AddInputField(label, "", 50, nil, nil)
 	}
 
+	for _, label := range c.portLabels {
+		c.form.AddInputField(label, "", 10, func(textToCheck string, lastChar rune) bool {
+			if lastChar == 0 {
+				return true
+			}
+			return lastChar >= '0' && lastChar <= '9'
+		}, nil)
+	}
+
 	// Action buttons
 	c.form.AddButton("保存", c.saveConfig)
 	c.form.AddButton("重置", c.resetConfig)
@@ -97,6 +111,18 @@ func (c *ConfigPage) Activate() {
 		func() {
 			c.updateConfigForm()
 		})
+
+	go func() {
+		config, err := api.Client.GetConfig()
+		if err != nil {
+			log.Printf("failed to fetch mihomo config for ports: %v", err)
+			return
+		}
+		c.mihomoConfig = config
+		ui.Updater.UpdateUi(func() {
+			c.updatePortFields()
+		})
+	}()
 }
 
 // Deactivate deactivates the config page
@@ -108,7 +134,24 @@ func (c *ConfigPage) updateConfigForm() {
 	for _, label := range c.labels {
 		c.form.GetFormItemByLabel(label).(*tview.InputField).SetText(c.currentConfig.GetValue(label))
 	}
+	c.updatePortFields()
 	c.statusText.SetText("[green]配置加载完毕[white]")
+}
+
+func (c *ConfigPage) updatePortFields() {
+	if c.mihomoConfig == nil {
+		return
+	}
+	setField := func(label string, value int) {
+		if value != 0 {
+			c.form.GetFormItemByLabel(label).(*tview.InputField).SetText(strconv.Itoa(value))
+		} else {
+			c.form.GetFormItemByLabel(label).(*tview.InputField).SetText("")
+		}
+	}
+	setField("HTTP端口", c.mihomoConfig.Port)
+	setField("SOCKS端口", c.mihomoConfig.SocksPort)
+	setField("混合端口", c.mihomoConfig.MixedPort)
 }
 
 // saveConfig saves the configuration from form
@@ -127,17 +170,16 @@ func (c *ConfigPage) saveConfig() {
 		newConfig.SetValue(value, c.form.GetFormItemByLabel(value).(*tview.InputField).GetText())
 	}
 
-	// Validate
+	// Validate (use a temporary manager to check config without writing)
 	tempManager := &config.Manager{}
-	tempManager.Set(&newConfig)
+	tempManager.SetInMemory(&newConfig)
 	if err := tempManager.Validate(); err != nil {
 		c.showStatus(fmt.Sprintf("[red]配置无效: %v[white]", err))
 		return
 	}
 
 	// Save
-	c.configManager.Set(&newConfig)
-	if err := c.configManager.Save(); err != nil {
+	if err := c.configManager.Set(&newConfig); err != nil {
 		c.showStatus(fmt.Sprintf("[red]保存失败: %v[white]", err))
 		return
 	}
@@ -146,6 +188,17 @@ func (c *ConfigPage) saveConfig() {
 	api.UpdateClient(newConfig.API.BaseURL, newConfig.API.Secret)
 
 	c.currentConfig = &newConfig
+
+	portConfig := &models.Config{
+		Port:      c.getPortFieldValue("HTTP端口"),
+		SocksPort: c.getPortFieldValue("SOCKS端口"),
+		MixedPort: c.getPortFieldValue("混合端口"),
+	}
+	if err := api.Client.UpdateConfig(portConfig); err != nil {
+		c.showStatus(fmt.Sprintf("[yellow]配置已保存，但端口更新失败: %v[white]", err))
+		return
+	}
+
 	c.showStatus("[green]配置已保存[white]")
 }
 
@@ -166,15 +219,49 @@ func (c *ConfigPage) resetConfig() {
 		})
 }
 
-// testConnection tests the API connection
+// testConnection tests the API connection using form values
 func (c *ConfigPage) testConnection() {
+	url := c.form.GetFormItemByLabel("API地址").(*tview.InputField).GetText()
+	secret := c.form.GetFormItemByLabel("API密钥").(*tview.InputField).GetText()
+
+	if url == "" {
+		c.showStatus("[red]API地址不能为空[white]")
+		return
+	}
+
+	testBtn := c.form.GetButton(2)
+	testBtn.SetDisabled(true)
 	c.showStatus("[yellow]正在测试连接...[white]")
 
-	if err := api.Client.HealthCheck(); err != nil {
-		c.showStatus(fmt.Sprintf("[red]连接失败: %v[white]", err))
-	} else {
-		c.showStatus("[green]连接成功![white]")
+	origURL := c.currentConfig.API.BaseURL
+	origSecret := c.currentConfig.API.Secret
+
+	go func() {
+		api.UpdateClient(url, secret)
+		defer api.UpdateClient(origURL, origSecret)
+		err := api.Client.HealthCheck()
+
+		ui.Updater.UpdateUi(func() {
+			testBtn.SetDisabled(false)
+			if err != nil {
+				c.showStatus(fmt.Sprintf("[red]连接失败: %v[white]", err))
+			} else {
+				c.showStatus("[green]连接成功![white]")
+			}
+		})
+	}()
+}
+
+func (c *ConfigPage) getPortFieldValue(label string) int {
+	text := c.form.GetFormItemByLabel(label).(*tview.InputField).GetText()
+	if text == "" {
+		return 0
 	}
+	value, err := strconv.Atoi(text)
+	if err != nil {
+		return 0
+	}
+	return value
 }
 
 // showStatus displays a status message

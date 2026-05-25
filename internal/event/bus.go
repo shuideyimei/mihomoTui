@@ -26,22 +26,17 @@ func NewBus() *Bus {
 func (b *Bus) Publish(event types.Event) {
 	b.mu.RLock()
 	handlers, ok := b.subscribers[event.Type]
-	b.mu.RUnlock()
-
-	if !ok {
-		return
-	}
-
-	b.mu.RLock()
-	for id, handler := range handlers {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("[eventbus] panic in handler %s for %s: %v", id, event.Type, r)
-				}
+	if ok {
+		for id, handler := range handlers {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("[eventbus] panic in handler %s for %s: %v", id, event.Type, r)
+					}
+				}()
+				handler(event)
 			}()
-			handler(event)
-		}()
+		}
 	}
 	b.mu.RUnlock()
 }

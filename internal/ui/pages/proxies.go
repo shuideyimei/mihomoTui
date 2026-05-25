@@ -7,6 +7,7 @@ import (
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
+	"mihomoTui/internal/ui/components"
 	"sort"
 	"strings"
 	"sync"
@@ -42,6 +43,8 @@ type ProxiesPage struct {
 	switchButtons *tview.Flex
 	nodesList     *tview.Table
 	statusText    *tview.TextView // Simple status display
+	searchInput   *tview.InputField
+	filterText    string
 
 	// Button references for mode switching
 	ruleBtn   *tview.Button
@@ -71,7 +74,7 @@ type ProxiesPage struct {
 	// Navigation
 	focusableComponents []tview.Primitive
 	currentFocusIndex   int
-	switchButtonIndex   int
+	buttonNav           *components.ButtonNavigator
 	focusableButtons    []*tview.Button
 }
 
@@ -134,6 +137,7 @@ func (p *ProxiesPage) setupLayout() {
 	p.createSwitchButtons()
 	p.createNodesList()
 	p.createStatusText()
+	p.createSearchInput()
 
 	// Initialize navigation system
 	p.initializeNavigation()
@@ -144,10 +148,15 @@ func (p *ProxiesPage) setupLayout() {
 	leftPanel.AddItem(p.switchButtons, 3, 0, false)
 	leftPanel.AddItem(p.statusText, 3, 0, false)
 
+	// Create right panel (search input + nodes list)
+	rightPanel := tview.NewFlex().SetDirection(tview.FlexRow)
+	rightPanel.AddItem(p.searchInput, 1, 0, false)
+	rightPanel.AddItem(p.nodesList, 0, 1, false)
+
 	// Main layout
 	p.SetDirection(tview.FlexColumn)
 	p.AddItem(leftPanel, 0, 1, true)
-	p.AddItem(p.nodesList, 0, 2, false)
+	p.AddItem(rightPanel, 0, 2, false)
 
 	p.SetBorder(true)
 	p.SetTitle(" 代理管理 ")
@@ -160,6 +169,27 @@ func (p *ProxiesPage) createStatusText() {
 	p.statusText.SetTitle(" 状态 ")
 	p.statusText.SetDynamicColors(true)
 	p.statusText.SetText("加载中...")
+}
+
+// createSearchInput creates the search input for filtering nodes
+func (p *ProxiesPage) createSearchInput() {
+	p.searchInput = tview.NewInputField()
+	p.searchInput.SetLabel("🔍 ")
+	p.searchInput.SetPlaceholder("搜索节点...")
+	p.searchInput.SetChangedFunc(func(text string) {
+		p.filterText = text
+		p.updateNodesListContent()
+	})
+	p.searchInput.SetFieldWidth(30)
+	p.searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEsc {
+			p.searchInput.SetText("")
+			p.filterText = ""
+			p.updateNodesListContent()
+			return nil
+		}
+		return event
+	})
 }
 
 // createGroupsList creates the proxy groups list
@@ -182,7 +212,8 @@ func (p *ProxiesPage) createSwitchButtons() {
 
 	// Initialize button navigation
 	p.focusableButtons = []*tview.Button{p.ruleBtn, p.globalBtn, p.directBtn}
-	p.switchButtonIndex = 0
+	p.buttonNav = components.NewButtonNavigator()
+	p.buttonNav.SetButtons(p.focusableButtons)
 
 	// Set initial button styles
 	p.updateButtonStyles()
@@ -206,10 +237,10 @@ func (p *ProxiesPage) createSwitchButtons() {
 	p.switchButtons.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyLeft:
-			p.switchToPrevButton()
+			p.buttonNav.Prev()
 			return nil
 		case tcell.KeyRight:
-			p.switchToNextButton()
+			p.buttonNav.Next()
 			return nil
 		}
 		return event
@@ -520,8 +551,36 @@ func (p *ProxiesPage) updateNodesListContent() {
 	}
 
 	// Display each entry in the group's All list
-	for i, name := range allNodes {
-		row := i + 1
+	row := 1
+	firstNode := ""
+	for _, name := range allNodes {
+		// Filter by search text (case-insensitive), matching name, type, and status
+		if p.filterText != "" {
+			matchType := "-"
+			matchStatus := "-"
+			if node, found := nodeLookup[name]; found {
+				matchType = strings.ToUpper(node.Type)
+				if node.UDP {
+					matchStatus = "OK"
+				} else {
+					matchStatus = "TCP"
+				}
+			}
+			switch name {
+			case "DIRECT":
+				matchType = "DIRECT"
+			case "REJECT", "REJECT-DROP", "REJECT-TLS":
+				matchType = name
+			}
+			searchTarget := name + matchType + matchStatus
+			if !strings.Contains(strings.ToLower(searchTarget), strings.ToLower(p.filterText)) {
+				continue
+			}
+		}
+
+		if firstNode == "" {
+			firstNode = name
+		}
 
 		// Name cell
 		nameText := name
@@ -628,12 +687,13 @@ func (p *ProxiesPage) updateNodesListContent() {
 			SetTextColor(statusColor).
 			SetAlign(tview.AlignCenter)
 		p.nodesList.SetCell(row, 3, statusCell)
+		row++
 	}
 
 	// Select first node
-	if len(allNodes) > 0 {
+	if row > 1 {
 		p.nodesList.Select(1, 0)
-		p.selectedNode = allNodes[0]
+		p.selectedNode = firstNode
 	}
 }
 
@@ -961,7 +1021,7 @@ func (p *ProxiesPage) GetInputCapture() func(event *tcell.EventKey) *tcell.Event
 // initializeNavigation initializes the navigation system
 func (p *ProxiesPage) initializeNavigation() {
 	// Set up focusable components array
-	p.focusableComponents = []tview.Primitive{p.groupsList, p.switchButtons, p.nodesList}
+	p.focusableComponents = []tview.Primitive{p.groupsList, p.switchButtons, p.searchInput, p.nodesList}
 	p.currentFocusIndex = 0
 	p.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
@@ -993,7 +1053,7 @@ func (p *ProxiesPage) switchToNextComponent() {
 
 	// If switching to switchButtons, focus the current button
 	if p.currentFocusIndex == 1 && len(p.focusableButtons) > 0 {
-		ui.Updater.SetFocus(p.focusableButtons[p.switchButtonIndex])
+		ui.Updater.SetFocus(p.focusableButtons[p.buttonNav.Index()])
 	}
 }
 
@@ -1008,28 +1068,8 @@ func (p *ProxiesPage) switchToPrevComponent() {
 
 	// If switching to switchButtons, focus the current button
 	if p.currentFocusIndex == 1 && len(p.focusableButtons) > 0 {
-		ui.Updater.SetFocus(p.focusableButtons[p.switchButtonIndex])
+		ui.Updater.SetFocus(p.focusableButtons[p.buttonNav.Index()])
 	}
-}
-
-// switchToNextButton switches to the next button in switchButtons
-func (p *ProxiesPage) switchToNextButton() {
-	if len(p.focusableButtons) == 0 {
-		return
-	}
-
-	p.switchButtonIndex = (p.switchButtonIndex + 1) % len(p.focusableButtons)
-	ui.Updater.SetFocus(p.focusableButtons[p.switchButtonIndex])
-}
-
-// switchToPrevButton switches to the previous button in switchButtons
-func (p *ProxiesPage) switchToPrevButton() {
-	if len(p.focusableButtons) == 0 {
-		return
-	}
-
-	p.switchButtonIndex = (p.switchButtonIndex - 1 + len(p.focusableButtons)) % len(p.focusableButtons)
-	ui.Updater.SetFocus(p.focusableButtons[p.switchButtonIndex])
 }
 
 // focusGroupsList focuses the groups list
@@ -1040,7 +1080,7 @@ func (p *ProxiesPage) focusGroupsList() {
 
 // focusNodesList focuses the nodes list
 func (p *ProxiesPage) focusNodesList() {
-	p.currentFocusIndex = 2
+	p.currentFocusIndex = 3
 	ui.Updater.SetFocus(p.nodesList)
 }
 
@@ -1048,6 +1088,6 @@ func (p *ProxiesPage) focusNodesList() {
 func (p *ProxiesPage) focusSwitchButtons() {
 	p.currentFocusIndex = 1
 	if len(p.focusableButtons) > 0 {
-		ui.Updater.SetFocus(p.focusableButtons[p.switchButtonIndex])
+		ui.Updater.SetFocus(p.focusableButtons[p.buttonNav.Index()])
 	}
 }

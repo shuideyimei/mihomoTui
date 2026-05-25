@@ -255,10 +255,31 @@ func Parse(data []byte) (*types.ConfigDocument, error) {
 
 // parseClashYAML parses a Clash/Mihomo YAML config.
 func parseClashYAML(data []byte) (*types.ConfigDocument, error) {
+	// First unmarshal into a raw map to detect which scalar keys were explicitly set.
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("invalid Clash YAML: %w", err)
+	}
+
 	var doc types.ConfigDocument
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("invalid Clash YAML: %w", err)
 	}
+
+	// Track explicitly set scalar fields so mergeScalars can distinguish
+	// "explicitly set to zero" from "not set".
+	doc.SetFields = make(map[string]bool)
+	scalarKeys := []string{
+		"port", "socks-port", "mixed-port", "redir-port", "tproxy-port",
+		"allow-lan", "bind-address", "mode", "log-level", "external-ui",
+		"secret", "interface-name", "routing-mark", "ipv6", "tcp-concurrent",
+	}
+	for _, k := range scalarKeys {
+		if _, ok := raw[k]; ok {
+			doc.SetFields[k] = true
+		}
+	}
+
 	return &doc, nil
 }
 

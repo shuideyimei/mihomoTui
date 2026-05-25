@@ -3,8 +3,6 @@ package pages
 import (
 	"mihomoTui/internal/config"
 	proxygroupspage "mihomoTui/internal/ui/pages/proxygroups"
-
-	"github.com/rivo/tview"
 )
 
 // ActivatablePage interface for pages that need activation/deactivation control
@@ -93,14 +91,10 @@ func (p *Rules) Deactivate() {
 }
 
 // NewSettings creates a new settings page
-func NewSettings(configManager *config.Manager) *Settings {
-	settings := &Settings{
-		TextView:      tview.NewTextView(),
-		configManager: configManager,
-	}
-	settings.SetBorder(true)
-	settings.SetTitle(" 设置 ")
-	settings.SetText("设置页面 - 开发中...")
+func NewSettings(configManager *config.Manager, appName, appVersion string) *Settings {
+	return newSettingsPage(configManager, appName, appVersion)
+}
 
-	return settings
+func NewConfigManager() *ConfigManager {
+	return newConfigManagerPage()
 }

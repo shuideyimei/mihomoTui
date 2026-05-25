@@ -35,6 +35,8 @@ func NewSidebar() *Sidebar {
 			{Label: "代理组", Icon: "📦", Shortcut: "G"},
 			{Label: "规则", Icon: "📋", Shortcut: "U"},
 			{Label: "规则提供者", Icon: "🔖", Shortcut: "T"},
+			{Label: "设置", Icon: "⚙️", Shortcut: "K"},
+			{Label: "配置管理", Icon: "🔧", Shortcut: "M"},
 		},
 	}
 

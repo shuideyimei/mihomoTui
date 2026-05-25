@@ -30,6 +30,10 @@ type ConfigDocument struct {
 
 	// Extra preserves any top-level keys not covered above.
 	Extra map[string]interface{} `yaml:",inline"`
+
+	// SetFields tracks which scalar fields were explicitly set during parsing.
+	// Used by mergeScalars to distinguish "explicitly set to zero" from "not set".
+	SetFields map[string]bool `json:"-" yaml:"-"`
 }
 
 // Clone returns a deep copy by round-tripping through map.
@@ -45,6 +49,7 @@ func (c *ConfigDocument) Clone() *ConfigDocument {
 	cp.Extra = cloneMapSS(c.Extra)
 	cp.DNS = cloneMapSS(c.DNS)
 	cp.Tun = cloneMapSS(c.Tun)
+	cp.SetFields = cloneMapSSB(c.SetFields)
 	if c.Rules != nil {
 		cp.Rules = make([]string, len(c.Rules))
 		copy(cp.Rules, c.Rules)
@@ -61,6 +66,17 @@ func cloneMaps(src []map[string]interface{}) []map[string]interface{} {
 		if m != nil {
 			dst[i] = cloneMapSS(m)
 		}
+	}
+	return dst
+}
+
+func cloneMapSSB(src map[string]bool) map[string]bool {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[string]bool, len(src))
+	for k, v := range src {
+		dst[k] = v
 	}
 	return dst
 }

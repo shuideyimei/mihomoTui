@@ -26,12 +26,14 @@ type App struct {
 	content   tview.Primitive
 
 	rootLayout   *tview.Flex
+	rootPages    *tview.Pages
 	mainLayout   *tview.Flex
 	pages        *tview.Pages
 	pageNames    []string
 	currentPage  int
 
 	focusOnSidebar bool
+	showingHelp    bool
 	appName        string
 	appVersion     string
 }
@@ -40,7 +42,7 @@ type App struct {
 func NewApp(appName, appVersion string) *App {
 	return &App{
 		app:            tview.NewApplication(),
-		pageNames:      []string{"dashboard", "proxies", "connections", "config", "logs", "subscriptions", "proxygroups", "rules", "ruleproviders"},
+		pageNames:      []string{"dashboard", "proxies", "connections", "config", "logs", "subscriptions", "proxygroups", "rules", "ruleproviders", "settings", "configmgr"},
 		focusOnSidebar: true,
 		appName:        appName,
 		appVersion:     appVersion,
@@ -99,8 +101,12 @@ func (a *App) setupUI() {
 	// Create layouts
 	a.setupLayouts()
 
+	a.rootPages = tview.NewPages()
+	a.rootPages.AddPage("main", a.rootLayout, true, true)
+	a.rootPages.AddPage("help", pages.NewHelpPage(), true, false)
+
 	// Configure application
-	a.app.SetRoot(a.rootLayout, true)
+	a.app.SetRoot(a.rootPages, true)
 	a.app.EnableMouse(true)   // Enable mouse support by default
 	a.app.EnablePaste(true)   // Enable bracketed paste mode for reliable paste handling
 
@@ -153,8 +159,11 @@ func (a *App) setupPages() {
 	a.pages.AddPage("ruleproviders", rpPage, true, false)
 
 	// Settings page
-	// settingsPage := pages.NewSettings(a.configManager)
-	// a.pages.AddPage("settings", settingsPage, true, false)
+	settingsPage := pages.NewSettings(a.configManager, a.appName, a.appVersion)
+	a.pages.AddPage("settings", settingsPage, true, false)
+
+	configMgrPage := pages.NewConfigManager()
+	a.pages.AddPage("configmgr", configMgrPage, true, false)
 }
 
 // setupLayouts creates the application layout

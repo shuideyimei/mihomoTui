@@ -25,18 +25,26 @@ func NewManager() *Manager {
 func (m *Manager) Get(key string) (interface{}, bool) {
 	m.mu.RLock()
 	entry, ok := m.store[key]
-	m.mu.RUnlock()
-
 	if !ok {
+		m.mu.RUnlock()
 		return nil, false
 	}
 
 	if !entry.ExpireAt.IsZero() && time.Now().After(entry.ExpireAt) {
-		m.Delete(key)
+		m.mu.RUnlock()
+		// Upgrade to write lock for atomic delete (prevents lost update race).
+		m.mu.Lock()
+		// Double-check: another goroutine may have already deleted or refreshed this entry.
+		if e, ok := m.store[key]; ok && !e.ExpireAt.IsZero() && time.Now().After(e.ExpireAt) {
+			delete(m.store, key)
+		}
+		m.mu.Unlock()
 		return nil, false
 	}
 
-	return entry.Value, true
+	val := entry.Value
+	m.mu.RUnlock()
+	return val, true
 }
 
 // Set stores a value with optional TTL.
@@ -76,6 +84,7 @@ func (m *Manager) Size() int {
 }
 
 // GetOrSet atomically retrieves a value or computes and stores it.
+// Uses double-checked locking to reduce thundering herd on concurrent access.
 func (m *Manager) GetOrSet(key string, ttl time.Duration, fn func() (interface{}, error)) (interface{}, error) {
 	if val, ok := m.Get(key); ok {
 		return val, nil

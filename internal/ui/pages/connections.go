@@ -34,9 +34,10 @@ func (c *Connections) Deactivate() {
 
 // ConnectionsPage represents the connections management page
 type ConnectionsPage struct {
-	*tview.Flex
+	*tview.Pages
 
 	// Components
+	mainFlex         *tview.Flex
 	connectionsTable *tview.Table
 	statusText       *tview.TextView
 	infoPanel        *tview.TextView
@@ -60,7 +61,7 @@ type ConnectionsPage struct {
 // NewConnectionsPage creates a new connections management page
 func NewConnectionsPage() *ConnectionsPage {
 	page := &ConnectionsPage{
-		Flex:        tview.NewFlex(),
+		Pages:       tview.NewPages(),
 		connections: make([]models.Connection, 0),
 		autoRefresh: true,
 	}
@@ -115,12 +116,14 @@ func (c *ConnectionsPage) setupLayout() {
 	rightPanel.AddItem(c.statusText, 6, 0, false)
 
 	// Main layout
-	c.SetDirection(tview.FlexColumn)
-	c.AddItem(c.connectionsTable, 0, 3, true)
-	c.AddItem(rightPanel, 40, 0, false)
+	c.mainFlex = tview.NewFlex().SetDirection(tview.FlexColumn)
+	c.mainFlex.AddItem(c.connectionsTable, 0, 3, true)
+	c.mainFlex.AddItem(rightPanel, 40, 0, false)
 
-	c.SetBorder(true)
-	c.SetTitle(" 连接管理 ")
+	c.mainFlex.SetBorder(true)
+	c.mainFlex.SetTitle(" 连接管理 ")
+
+	c.AddPage("main", c.mainFlex, true, true)
 }
 
 // createConnectionsTable creates the connections table
@@ -178,6 +181,9 @@ func (c *ConnectionsPage) setupEventHandlers() {
 	// Connections table input handler
 	c.connectionsTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
+		case tcell.KeyEnter:
+			c.showConnectionDetails()
+			return nil
 		case tcell.KeyDelete:
 			c.closeSelectedConnection()
 			return nil
@@ -359,6 +365,105 @@ func (c *ConnectionsPage) updateInfoPanel(conn models.Connection) {
 	})
 }
 
+func (c *ConnectionsPage) showConnectionDetails() {
+	c.mutex.RLock()
+	connID := c.selectedConnID
+	connections := c.connections
+	c.mutex.RUnlock()
+
+	if connID == "" || len(connections) == 0 {
+		return
+	}
+
+	var conn *models.Connection
+	for i := range connections {
+		if connections[i].ID == connID {
+			conn = &connections[i]
+			break
+		}
+	}
+	if conn == nil {
+		return
+	}
+
+	detailFlex := c.createDetailView(conn)
+	c.AddPage("detail", detailFlex, true, true)
+	c.SwitchToPage("detail")
+	ui.Updater.SetFocus(detailFlex)
+}
+
+func (c *ConnectionsPage) createDetailView(conn *models.Connection) *tview.Flex {
+	var b strings.Builder
+	fmt.Fprintf(&b, "[yellow]ID:[white] %s\n\n", conn.ID)
+	fmt.Fprintf(&b, "[yellow]源地址:[white] %s:%s\n", conn.Metadata.SourceIP, conn.Metadata.SourcePort)
+	destAddr := fmt.Sprintf("%s:%s", conn.Metadata.DestinationIP, conn.Metadata.DestinationPort)
+	if conn.Metadata.Host != "" {
+		destAddr = fmt.Sprintf("%s:%s", conn.Metadata.Host, conn.Metadata.DestinationPort)
+	}
+	fmt.Fprintf(&b, "[yellow]目标地址:[white] %s\n", destAddr)
+	fmt.Fprintf(&b, "[yellow]主机:[white] %s\n", c.safeString(conn.Metadata.Host, "无"))
+	fmt.Fprintf(&b, "[yellow]上传:[white] %s\n", c.formatBytes(conn.Upload))
+	fmt.Fprintf(&b, "[yellow]下载:[white] %s\n", c.formatBytes(conn.Download))
+	fmt.Fprintf(&b, "[yellow]总量:[white] %s\n", c.formatBytes(conn.Upload+conn.Download))
+	fmt.Fprintf(&b, "[yellow]开始时间:[white] %s\n", conn.Start.Format("2006-01-02 15:04:05"))
+	fmt.Fprintf(&b, "[yellow]持续时间:[white] %s\n", time.Since(conn.Start).Truncate(time.Second).String())
+	fmt.Fprintf(&b, "[yellow]代理链:[white] %s\n", c.formatChains(conn.Chains))
+	fmt.Fprintf(&b, "[yellow]规则:[white] %s", conn.Rule)
+	if conn.RulePayload != "" {
+		fmt.Fprintf(&b, " (%s)", conn.RulePayload)
+	}
+	fmt.Fprintf(&b, "\n[yellow]进程路径:[white] %s\n", c.safeString(conn.Metadata.ProcessPath, "未知"))
+	fmt.Fprintf(&b, "[yellow]网络类型:[white] %s\n", conn.Metadata.Network)
+	fmt.Fprintf(&b, "[yellow]连接类型:[white] %s\n", conn.Metadata.Type)
+	fmt.Fprintf(&b, "[yellow]DNS模式:[white] %s\n", c.safeString(conn.Metadata.DNSMode, "未知"))
+	fmt.Fprintf(&b, "[yellow]特殊代理:[white] %s", c.safeString(conn.Metadata.SpecialProxy, "无"))
+	fmt.Fprintf(&b, "\n\n[gray]按 [yellow]Esc[gray] 或点击 [yellow]关闭[gray] 返回")
+
+	textView := tview.NewTextView().
+		SetDynamicColors(true).
+		SetWordWrap(true).
+		SetText(b.String())
+
+	closeBtn := tview.NewButton(" 关闭 (Esc) ")
+	closeBtn.SetSelectedFunc(func() {
+		c.RemovePage("detail")
+		c.SwitchToPage("main")
+		ui.Updater.SetFocus(c.connectionsTable)
+	})
+
+	popupFlex := tview.NewFlex().SetDirection(tview.FlexRow)
+	popupFlex.SetBorder(true)
+	popupFlex.SetTitle(" 连接详情 ")
+	popupFlex.AddItem(textView, 0, 1, false)
+	popupFlex.AddItem(closeBtn, 1, 0, true)
+
+	popupFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEsc {
+			c.RemovePage("detail")
+			c.SwitchToPage("main")
+			ui.Updater.SetFocus(c.connectionsTable)
+			return nil
+		}
+		return event
+	})
+
+	hFlex := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(popupFlex, 0, 3, false).
+		AddItem(nil, 0, 1, false)
+
+	vFlex := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(nil, 0, 1, false).
+		AddItem(hFlex, 0, 3, false).
+		AddItem(nil, 0, 1, false)
+
+	return vFlex
+}
+
+func (c *ConnectionsPage) focusTable() {
+	ui.Updater.SetFocus(c.connectionsTable)
+}
+
 // formatBytes formats byte count to human readable format
 func (c *ConnectionsPage) formatBytes(bytes int64) string {
 	const unit = 1024
@@ -514,16 +619,17 @@ func (c *ConnectionsPage) startAutoRefresh() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	c.refreshCancel = cancel
-	c.refreshTicker = time.NewTicker(2 * time.Second) // Refresh every 2 seconds
+	ticker := time.NewTicker(2 * time.Second) // Refresh every 2 seconds
+	c.refreshTicker = ticker
 
 	go func() {
-		defer c.refreshTicker.Stop()
+		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-c.refreshTicker.C:
+			case <-ticker.C:
 				c.mutex.RLock()
 				isActive := c.isActive
 				autoRefresh := c.autoRefresh
@@ -554,22 +660,28 @@ func (c *ConnectionsPage) stopAutoRefresh() {
 	}
 }
 
-// showError shows an error message
+// showError shows an error message in the status area
 func (c *ConnectionsPage) showError(message string) {
 	log.Printf("Error: %s", message)
-	// We'll update status instead of having a separate error display
+	go ui.Updater.UpdateUi(func() {
+		c.statusText.SetText(fmt.Sprintf("[red]错误:[white] %s", message))
+	})
 }
 
-// showSuccess shows a success message
+// showSuccess shows a success message in the status area
 func (c *ConnectionsPage) showSuccess(message string) {
 	log.Printf("Success: %s", message)
-	// We'll update status instead of having a separate success display
+	go ui.Updater.UpdateUi(func() {
+		c.statusText.SetText(fmt.Sprintf("[green]成功:[white] %s", message))
+	})
 }
 
-// showInfo shows an info message
+// showInfo shows an info message in the status area
 func (c *ConnectionsPage) showInfo(message string) {
 	log.Printf("Info: %s", message)
-	// We'll update status instead of having a separate info display
+	go ui.Updater.UpdateUi(func() {
+		c.statusText.SetText(fmt.Sprintf("[yellow]信息:[white] %s", message))
+	})
 }
 
 // GetInputCapture returns the input capture function for keyboard shortcuts

@@ -2,29 +2,54 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"sync"
 	"time"
 
 	"mihomoTui/internal/models"
 )
 
+var stopLogSync context.CancelFunc
+
 func init() {
-	// output to file
-	logFile, err := os.OpenFile("mihomo.log", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
-	go func() {
-		for {
-			time.Sleep(2 * time.Second)
-			logFile.Sync()
-		}
-	}()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("failed to get home dir: %v", err)
+	}
+	logDir := filepath.Join(homeDir, ".config", "mihomoTui")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		log.Fatalf("failed to create log dir: %v", err)
+	}
+	logPath := filepath.Join(logDir, "mihomo.log")
+
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		log.Fatalf("failed to open log file: %v", err)
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stopLogSync = cancel
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		defer logFile.Close()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				logFile.Sync()
+			}
+		}
+	}()
+
 	log.SetOutput(logFile)
 }
 
@@ -35,6 +60,7 @@ var (
 
 // HttpClient represents the API client
 type HttpClient struct {
+	mu         sync.RWMutex
 	baseURL    string
 	secret     string
 	httpClient *http.Client
@@ -59,13 +85,24 @@ func InitClient(baseURL, secret string) {
 }
 
 func UpdateClient(baseURL, secret string) {
+	Client.mu.Lock()
 	Client.baseURL = baseURL
 	Client.secret = secret
+	Client.mu.Unlock()
 
+	StreamClient.mu.Lock()
 	StreamClient.baseURL = baseURL
 	StreamClient.secret = secret
+	StreamClient.mu.Unlock()
 
-	log.Printf("Updated API client: %s, Secret: %s", baseURL, secret)
+	log.Printf("Updated API client: %s", baseURL)
+}
+
+// drainAndClose drains the response body and closes it.
+// Draining is required for HTTP connection reuse by Go's transport.
+func drainAndClose(resp *http.Response) {
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
 }
 
 // SetTimeout sets the HTTP client timeout
@@ -73,12 +110,19 @@ func (c *HttpClient) SetTimeout(timeout time.Duration) {
 	c.httpClient.Timeout = timeout
 }
 
-// makeRequest makes an HTTP request to the API
+// makeRequest makes an HTTP request to the API.
 func (c *HttpClient) makeRequest(method, endpoint string, body interface{}) (*http.Response, error) {
+	return c.makeRequestWithContext(context.Background(), method, endpoint, body)
+}
+
+// makeRequestWithContext is like makeRequest but uses the given context for
+// the HTTP request, enabling context-based cancellation of in-flight requests
+// and response body reads.
+func (c *HttpClient) makeRequestWithContext(ctx context.Context, method, endpoint string, body interface{}) (*http.Response, error) {
+	c.mu.RLock()
 	url := fmt.Sprintf("%s%s", c.baseURL, endpoint)
-	// Log request details
-	// data, _ := json.MarshalIndent(body, "", "  ")
-	// log.Printf("Request [%s] %s\tData: %s", method, url, string(data))
+	secret := c.secret
+	c.mu.RUnlock()
 
 	var reqBody io.Reader
 	if body != nil {
@@ -89,15 +133,15 @@ func (c *HttpClient) makeRequest(method, endpoint string, body interface{}) (*ht
 		reqBody = bytes.NewBuffer(jsonBody)
 	}
 
-	req, err := http.NewRequest(method, url, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	if c.secret != "" {
-		req.Header.Set("Authorization", "Bearer "+c.secret)
+	if secret != "" {
+		req.Header.Set("Authorization", "Bearer "+secret)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -113,7 +157,7 @@ func (c *HttpClient) GetVersion() (*models.Version, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -133,7 +177,7 @@ func (c *HttpClient) GetConfig() (*models.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -153,7 +197,7 @@ func (c *HttpClient) UpdateConfig(config *models.Config) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("failed to update config, status: %d", resp.StatusCode)
@@ -168,7 +212,7 @@ func (c *HttpClient) GetProxies() (map[string]*models.Proxy, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -191,7 +235,7 @@ func (c *HttpClient) GetProviders() (*models.ProvidersResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -218,7 +262,7 @@ func (c *HttpClient) TestGroupDelay(groupName string, testURL string, timeout in
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to test group delay, status: %d", resp.StatusCode)
@@ -239,7 +283,7 @@ func (c *HttpClient) GetProxy(name string) (*models.Proxy, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -262,7 +306,7 @@ func (c *HttpClient) SelectProxy(groupName, proxyName string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("failed to select proxy, status: %d", resp.StatusCode)
@@ -284,7 +328,7 @@ func (c *HttpClient) TestProxyDelay(name string, testURL string, timeout int) (i
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("failed to test delay, status: %d", resp.StatusCode)
@@ -307,7 +351,7 @@ func (c *HttpClient) GetRules() ([]models.Rule, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -330,7 +374,7 @@ func (c *HttpClient) GetRuleProviders() (*models.RuleProvidersResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -351,7 +395,7 @@ func (c *HttpClient) RefreshRuleProvider(name string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("failed to refresh rule provider, status: %d", resp.StatusCode)
@@ -366,7 +410,7 @@ func (c *HttpClient) GetConnections() ([]models.Connection, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -390,7 +434,7 @@ func (c *HttpClient) CloseConnection(id string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("failed to close connection, status: %d", resp.StatusCode)
@@ -403,7 +447,10 @@ func (c *HttpClient) CloseConnection(id string) error {
 // request with the config file path in JSON format. The config file must already
 // have been written by writeConfig before calling this function.
 func (c *HttpClient) ReloadConfig(path string) error {
+	c.mu.RLock()
 	url := fmt.Sprintf("%s%s", c.baseURL, "/configs")
+	secret := c.secret
+	c.mu.RUnlock()
 
 	body := map[string]string{"path": path}
 	jsonBody, err := json.Marshal(body)
@@ -416,18 +463,67 @@ func (c *HttpClient) ReloadConfig(path string) error {
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if c.secret != "" {
-		req.Header.Set("Authorization", "Bearer "+c.secret)
+	if secret != "" {
+		req.Header.Set("Authorization", "Bearer "+secret)
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("reload failed, status: %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("reload failed, status: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// ReloadConfigData sends raw YAML content to PUT /configs, bypassing SAFE_PATHS
+// validation by sending the config content as the request body.
+func (c *HttpClient) ReloadConfigData(data []byte) error {
+	c.mu.RLock()
+	url := fmt.Sprintf("%s%s", c.baseURL, "/configs")
+	secret := c.secret
+	c.mu.RUnlock()
+
+	req, err := http.NewRequest("PUT", url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/yaml")
+	if secret != "" {
+		req.Header.Set("Authorization", "Bearer "+secret)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer drainAndClose(resp)
+
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("reload failed, status: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// PatchConfig merges the given partial config into the running configuration
+// via PATCH /configs. This is used for runtime changes like adding safe-paths.
+func (c *HttpClient) PatchConfig(partial interface{}) error {
+	resp, err := c.makeRequest("PATCH", "/configs", partial)
+	if err != nil {
+		return fmt.Errorf("patch config request failed: %w", err)
+	}
+	defer drainAndClose(resp)
+
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("patch config failed, status: %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	return nil
@@ -439,7 +535,7 @@ func (c *HttpClient) HealthCheck() error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("health check failed, status: %d", resp.StatusCode)

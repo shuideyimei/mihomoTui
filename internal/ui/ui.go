@@ -46,14 +46,15 @@ func (u *UiUpdater) UpdateStatusBarConfig(config interface{}) {
 	}
 }
 
-func (u *UiUpdater) UpdateUiData(fn func()) {
-	// Implementation for queuing a UI update (without redraw)
-	u.app.QueueUpdate(fn)
+func (u *UiUpdater) UpdateUi(fn func()) {
+	u.app.QueueUpdateDraw(fn)
 }
 
-func (u *UiUpdater) UpdateUi(fn func()) {
-	// Implementation for triggering a UI update (with redraw)
-	u.app.QueueUpdateDraw(fn)
+// PostUi queues a UI update without blocking the caller.
+// Safe to call from any goroutine. The function will run on
+// the UI goroutine and the screen will be redrawn afterwards.
+func (u *UiUpdater) PostUi(fn func()) {
+	go u.app.QueueUpdateDraw(fn)
 }
 
 func (u *UiUpdater) SetFocus(focusable tview.Primitive) {

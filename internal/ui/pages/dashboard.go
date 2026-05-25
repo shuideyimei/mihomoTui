@@ -7,6 +7,7 @@ import (
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
+	"mihomoTui/internal/ui/components"
 	"mihomoTui/internal/utils"
 	"strings"
 	"sync"
@@ -47,8 +48,7 @@ type DashboardPage struct {
 	operationStatus *tview.TextView // Status bar for operation results
 
 	// Button navigation
-	focusableButtons   []*tview.Button
-	currentButtonIndex int
+	buttonNav *components.ButtonNavigator
 
 	// Data
 	connectionsData []models.Connection
@@ -141,9 +141,9 @@ func (d *DashboardPage) createControlButtons() {
 	d.tunBtn.SetStyle(tcell.StyleDefault.Background(tcell.ColorDeepSkyBlue))
 	d.tunBtn.SetSelectedFunc(d.toggleTun)
 
-	// Initialize focusable buttons array
-	d.focusableButtons = []*tview.Button{d.allowLanBtn, d.tunBtn}
-	d.currentButtonIndex = 0
+	// Initialize button navigation
+	d.buttonNav = components.NewButtonNavigator()
+	d.buttonNav.SetButtons([]*tview.Button{d.allowLanBtn, d.tunBtn})
 
 	// Add buttons to buttons row
 	buttonsRow.AddItem(d.allowLanBtn, 0, 2, true)
@@ -163,34 +163,14 @@ func (d *DashboardPage) createControlButtons() {
 	d.controlButtons.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyTAB, tcell.KeyRight:
-			d.switchToNextButton()
+			d.buttonNav.Next()
 			return nil
 		case tcell.KeyBacktab, tcell.KeyLeft:
-			d.switchToPrevButton()
+			d.buttonNav.Prev()
 			return nil
 		}
 		return event
 	})
-}
-
-// switchToNextButton switches focus to the next button in the array
-func (d *DashboardPage) switchToNextButton() {
-	if len(d.focusableButtons) == 0 {
-		return
-	}
-
-	d.currentButtonIndex = (d.currentButtonIndex + 1) % len(d.focusableButtons)
-	ui.Updater.SetFocus(d.focusableButtons[d.currentButtonIndex])
-}
-
-// switchToPrevButton switches focus to the previous button in the array
-func (d *DashboardPage) switchToPrevButton() {
-	if len(d.focusableButtons) == 0 {
-		return
-	}
-
-	d.currentButtonIndex = (d.currentButtonIndex - 1 + len(d.focusableButtons)) % len(d.focusableButtons)
-	ui.Updater.SetFocus(d.focusableButtons[d.currentButtonIndex])
 }
 
 // createOperationStatus creates the operation status bar
@@ -245,7 +225,9 @@ func (d *DashboardPage) periodicUpdates() {
 func (d *DashboardPage) updateConnectionsData() {
 	connections, err := api.Client.GetConnections()
 	if err != nil {
-		d.connectionsBox.SetText(fmt.Sprintf("[red]获取连接数据失败: %v[white]", err))
+		ui.Updater.PostUi(func() {
+			d.connectionsBox.SetText(fmt.Sprintf("[red]获取连接数据失败: %v[white]", err))
+		})
 		return
 	}
 
@@ -268,7 +250,9 @@ func (d *DashboardPage) updateConnectionsDisplay() {
 
 	totalConnections := len(connections)
 	content := fmt.Sprintf("[green]🔗 总连接数[white] %d", totalConnections)
-	d.connectionsBox.SetText(content)
+	ui.Updater.PostUi(func() {
+		d.connectionsBox.SetText(content)
+	})
 }
 
 // updateProxyStatusData updates proxy status data
@@ -297,17 +281,14 @@ func (d *DashboardPage) updateControlButtons() {
 		return
 	}
 
-	// Update AllowLAN button
+	// Compute button states (outside PostUi to avoid blocking UI goroutine)
 	allowLanStatus := "OFF"
+	allowLanBg := tcell.ColorRed
 	if config.AllowLan {
 		allowLanStatus = "ON"
-		d.allowLanBtn.SetBackgroundColor(tcell.ColorGreen)
-	} else {
-		d.allowLanBtn.SetBackgroundColor(tcell.ColorRed)
+		allowLanBg = tcell.ColorGreen
 	}
-	d.allowLanBtn.SetLabel(fmt.Sprintf("AllowLAN: %s", allowLanStatus))
 
-	// Update TUN button
 	tunStatus := "OFF"
 	tunColor := tcell.ColorRed
 	if config.Tun != nil {
@@ -316,22 +297,27 @@ func (d *DashboardPage) updateControlButtons() {
 			tunColor = tcell.ColorGreen
 		}
 	}
-	d.tunBtn.SetBackgroundColor(tunColor)
-	d.tunBtn.SetLabel(fmt.Sprintf("TUN: %s", tunStatus))
 
-	// Update status text with mode and port information
-	d.updateStatusText(config)
+	// Build status text outside PostUi
+	statusContent := d.buildStatusText(config)
+
+	ui.Updater.PostUi(func() {
+		d.allowLanBtn.SetLabel(fmt.Sprintf("AllowLAN: %s", allowLanStatus))
+		d.allowLanBtn.SetBackgroundColor(allowLanBg)
+		d.tunBtn.SetLabel(fmt.Sprintf("TUN: %s", tunStatus))
+		d.tunBtn.SetBackgroundColor(tunColor)
+		d.statusText.SetText(statusContent)
+	})
 }
 
-// updateStatusText updates the status text with mode and port information
-func (d *DashboardPage) updateStatusText(config *models.Config) {
+// buildStatusText builds the status text content string (goroutine-safe, no UI calls)
+func (d *DashboardPage) buildStatusText(config *models.Config) string {
 	if config == nil {
-		return
+		return ""
 	}
 
 	var contentBuilder strings.Builder
 
-	// Get mode color
 	modeColor := "white"
 	switch config.Mode {
 	case "global":
@@ -342,10 +328,8 @@ func (d *DashboardPage) updateStatusText(config *models.Config) {
 		modeColor = "yellow"
 	}
 
-	// Mode
 	fmt.Fprintf(&contentBuilder, "🎯 模式 [%s]%s[white]\n", modeColor, config.Mode)
 
-	// Port Status
 	fmt.Fprintf(&contentBuilder, "[yellow]⚙️ 端口状态[white]")
 	hasPort := false
 	if config.Port != 0 {
@@ -372,7 +356,7 @@ func (d *DashboardPage) updateStatusText(config *models.Config) {
 		contentBuilder.WriteString("  无活动端口")
 	}
 
-	d.statusText.SetText(contentBuilder.String())
+	return contentBuilder.String()
 }
 
 // showOperationStatus displays operation result status
@@ -382,23 +366,28 @@ func (d *DashboardPage) showOperationStatus(message string) {
 	// Auto-clear status after 3 seconds
 	go func() {
 		time.Sleep(3 * time.Second)
-		d.operationStatus.SetText("[white]就绪[white]")
+		ui.Updater.PostUi(func() {
+			d.operationStatus.SetText("[white]就绪[white]")
+		})
 	}()
 }
 
 // updateSystemInfo updates system information
 func (d *DashboardPage) updateSystemInfo() {
-
 	content := strings.Builder{}
 	var memUsage string
+	d.mutex.RLock()
 	if d.memoryData != nil {
 		memUsage = utils.FormatBytes(d.memoryData.Inuse)
 	} else {
 		memUsage = "-"
 	}
+	d.mutex.RUnlock()
 	fmt.Fprintf(&content, "[blue]💾 内存使用[white] %s", memUsage)
 
-	d.systemInfoBox.SetText(content.String())
+	ui.Updater.PostUi(func() {
+		d.systemInfoBox.SetText(content.String())
+	})
 }
 
 // Stop stops all background updates
@@ -442,12 +431,15 @@ func (d *DashboardPage) startStreamMemoryUsage() {
 			return
 		default:
 			err := api.StreamClient.StreamMemoryUsage(d.ctx, func(memory *models.MemoryUsage) {
+				d.mutex.Lock()
 				d.memoryData = memory
+				d.mutex.Unlock()
 			})
 
 			if err != nil && err != context.Canceled {
-				// Connection lost, wait and retry
+				d.mutex.Lock()
 				d.memoryData = nil
+				d.mutex.Unlock()
 				time.Sleep(5 * time.Second)
 			}
 		}

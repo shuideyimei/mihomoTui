@@ -30,3 +30,6 @@ ROADMAP.md
 PROGRESS.md
 PROJECT_PLAN.md
 .github/prompts
+.omo/
+scripts/
+coverage.out

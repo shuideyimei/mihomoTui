@@ -2,6 +2,7 @@ package updater
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -86,6 +87,7 @@ func (m *Manager) Stop() {
 }
 
 // UpdateOne triggers an immediate update for a single subscription.
+// It retries up to MaxAttempts times with exponential backoff.
 func (m *Manager) UpdateOne(ctx context.Context, id string) error {
 	m.mu.Lock()
 	task := &types.UpdateTask{
@@ -101,7 +103,63 @@ func (m *Manager) UpdateOne(ctx context.Context, id string) error {
 
 	m.emitProgress(id, 10, "开始更新...")
 
-	doc, err := m.subUpdater.Update(ctx, id)
+	maxAttempts := task.MaxAttempts
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
+
+	var doc *types.ConfigDocument
+	var err error
+	var allErrs []error
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		// Update attempt counter in the stored task
+		m.mu.Lock()
+		t, exists := m.tasks[id]
+		if !exists {
+			t = task
+		}
+		t.Attempt = attempt
+		t.Status = types.UpdateStatusRunning
+		m.tasks[id] = t
+		m.mu.Unlock()
+
+		if attempt > 1 {
+			m.emitProgress(id, 10, fmt.Sprintf("重试第 %d/%d 次...", attempt, maxAttempts))
+		}
+
+		doc, err = m.subUpdater.Update(ctx, id)
+		if err == nil {
+			// Success
+			break
+		}
+
+		allErrs = append(allErrs, fmt.Errorf("attempt %d/%d: %w", attempt, maxAttempts, err))
+
+		if attempt < maxAttempts {
+			// Exponential backoff: 1s, 2s, 4s, ... capped at 30s
+			backoff := time.Duration(1<<uint(attempt-1)) * time.Second
+			if backoff > 30*time.Second {
+				backoff = 30 * time.Second
+			}
+
+			select {
+			case <-ctx.Done():
+				m.mu.Lock()
+				t, exists := m.tasks[id]
+				if !exists {
+					t = task
+				}
+				t.EndTime = time.Now()
+				t.Status = types.UpdateStatusFailed
+				t.Error = "context cancelled during retry"
+				m.tasks[id] = t
+				m.mu.Unlock()
+				return ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
+	}
 
 	m.mu.Lock()
 	t, exists := m.tasks[id]
@@ -112,7 +170,11 @@ func (m *Manager) UpdateOne(ctx context.Context, id string) error {
 
 	if err != nil {
 		t.Status = types.UpdateStatusFailed
-		t.Error = err.Error()
+		var errMsg string
+		for _, e := range allErrs {
+			errMsg += e.Error() + "; "
+		}
+		t.Error = errMsg
 	} else if doc == nil {
 		t.Status = types.UpdateStatusSuccess
 	} else {
@@ -126,7 +188,7 @@ func (m *Manager) UpdateOne(ctx context.Context, id string) error {
 		m.emitProgress(id, 100, "更新失败")
 		m.publishEvent(types.EventUpdateFailed, map[string]interface{}{
 			"subscription_id": id,
-			"error":           err.Error(),
+			"error":           errors.Join(allErrs...).Error(),
 		})
 	} else if doc == nil {
 		m.emitProgress(id, 100, "无需更新")
@@ -155,7 +217,10 @@ func (m *Manager) UpdateOne(ctx context.Context, id string) error {
 		}
 	}
 
-	return err
+	if err != nil {
+		return errors.Join(allErrs...)
+	}
+	return nil
 }
 
 // UpdateAll triggers updates for all auto-update subscriptions in parallel.

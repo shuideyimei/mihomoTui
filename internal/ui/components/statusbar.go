@@ -135,7 +135,7 @@ func (s *StatusBar) updateContent() {
 	}
 
 	// Help text with new shortcuts
-	helpText := "[gray]F1-F6/Ctrl+1-6切换标签页 | ESC返回标签页 | Ctrl+C/Q退出 | Ctrl+R刷新[white]"
+	helpText := "[gray]F1-F9/Ctrl+1-9切换标签页 | ESC返回侧边栏 | Ctrl+C/Q退出 | Ctrl+R刷新[white]"
 
 	content = fmt.Sprintf("模式: [yellow]%s[white] | U: [green]%s[white]  D: [blue]%s[white]  %s",
 		mode, upSpeed, downSpeed, helpText)

@@ -4,106 +4,238 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/models"
+	"mihomoTui/internal/ui"
 
 	"github.com/rivo/tview"
 )
 
-// Logs represents the logs page
 type Logs struct {
 	*LogsPage
 }
 
-// Activate activates the logs page and starts streaming
 func (l *Logs) Activate() {
 	log.Printf("Activating logs page")
 	l.LogsPage.Activate()
 }
 
-// Deactivate deactivates the logs page and stops streaming
 func (l *Logs) Deactivate() {
 	log.Printf("Deactivating logs page")
 	l.LogsPage.Deactivate()
 }
 
-// LogsPage represents the logs page with streaming support
 type LogsPage struct {
 	*tview.Flex
 	textView *tview.TextView
 
-	// Streaming control
 	ctx    context.Context
 	cancel context.CancelFunc
 	mu     sync.Mutex
 	logs   []string
 
-	// Settings
 	maxLines int
+
+	levelFilter   string
+	isPaused      bool
+	searchText    string
+	searchInput   *tview.InputField
+	pauseBtn      *tview.Button
+	levelDropdown *tview.DropDown
+	clearBtn      *tview.Button
 }
 
-// NewLogsPage creates a new logs page with streaming support
+var levels = []string{"All", "Error", "Warn", "Info", "Debug"}
+
+func levelToAPI(display string) string {
+	switch display {
+	case "Error":
+		return "error"
+	case "Warn":
+		return "warning"
+	case "Info":
+		return "info"
+	case "Debug":
+		return "debug"
+	default:
+		return ""
+	}
+}
+
 func NewLogsPage() *LogsPage {
 	page := &LogsPage{
 		Flex:     tview.NewFlex(),
 		textView: tview.NewTextView(),
 		logs:     make([]string, 0),
-		maxLines: 1000, // Keep last 1000 lines
+		maxLines: 1000,
 	}
 
 	page.setupUI()
 	return page
 }
 
-// setupUI initializes the logs page UI
 func (p *LogsPage) setupUI() {
-	// Configure text view
 	p.textView.SetBorder(true)
 	p.textView.SetTitle(" 实时日志 ")
 	p.textView.SetDynamicColors(true)
 	p.textView.SetScrollable(true)
+
+	// Only auto-scroll when not paused
 	p.textView.SetChangedFunc(func() {
-		// Auto-scroll to bottom
+		p.mu.Lock()
+		paused := p.isPaused
+		p.mu.Unlock()
+		if paused {
+			return
+		}
 		go func() {
 			time.Sleep(10 * time.Millisecond)
-			p.textView.ScrollToEnd()
+			ui.Updater.PostUi(func() {
+				p.textView.ScrollToEnd()
+			})
 		}()
 	})
 
-	// Add text view to flex container
+	// Level dropdown
+	p.levelDropdown = tview.NewDropDown().
+		SetOptions(levels, func(text string, index int) {
+			p.mu.Lock()
+			p.levelFilter = levelToAPI(text)
+			p.mu.Unlock()
+			p.onLevelChanged()
+		})
+	p.levelDropdown.SetCurrentOption(0)
+	p.levelDropdown.SetLabel("Level: ")
+
+	// Search input
+	p.searchInput = tview.NewInputField().
+		SetLabel("Search: ").
+		SetFieldWidth(20)
+	p.searchInput.SetChangedFunc(func(text string) {
+		p.mu.Lock()
+		p.searchText = text
+		p.mu.Unlock()
+		p.refreshDisplay()
+	})
+
+	// Pause/Resume button
+	p.pauseBtn = tview.NewButton("⏸ Pause")
+	p.pauseBtn.SetSelectedFunc(func() {
+		p.togglePause()
+	})
+
+	// Clear button
+	p.clearBtn = tview.NewButton("Clear")
+	p.clearBtn.SetSelectedFunc(func() {
+		p.Clear()
+	})
+
+	// Control bar
+	controlBar := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(p.levelDropdown, 16, 0, false).
+		AddItem(p.searchInput, 24, 0, false).
+		AddItem(p.pauseBtn, 12, 0, false).
+		AddItem(p.clearBtn, 8, 0, false)
+
+	// Main layout
 	p.SetDirection(tview.FlexRow)
+	p.AddItem(controlBar, 1, 0, false)
 	p.AddItem(p.textView, 0, 1, true)
 }
 
-// startLogStream starts streaming logs from the API
+func (p *LogsPage) onLevelChanged() {
+	p.mu.Lock()
+	if p.cancel != nil {
+		p.cancel()
+	}
+	wasPaused := p.isPaused
+	p.isPaused = false
+	p.mu.Unlock()
+
+	p.ctx, p.cancel = context.WithCancel(context.Background())
+
+	if wasPaused {
+		p.mu.Lock()
+		p.isPaused = true
+		p.mu.Unlock()
+		p.pauseBtn.SetLabel("▶ Resume")
+	} else {
+		p.startLogStream()
+	}
+}
+
+func (p *LogsPage) togglePause() {
+	p.mu.Lock()
+	wasPaused := p.isPaused
+	p.isPaused = !p.isPaused
+	p.mu.Unlock()
+
+	if wasPaused {
+		if p.cancel != nil {
+			p.cancel()
+		}
+		p.ctx, p.cancel = context.WithCancel(context.Background())
+		p.pauseBtn.SetLabel("⏸ Pause")
+		p.startLogStream()
+	} else {
+		if p.cancel != nil {
+			p.cancel()
+		}
+		p.pauseBtn.SetLabel("▶ Resume")
+	}
+}
+
 func (p *LogsPage) startLogStream() {
 	go func() {
 		for {
+			p.mu.Lock()
+			ctx := p.ctx
+			level := p.levelFilter
+			p.mu.Unlock()
+
 			select {
-			case <-p.ctx.Done():
+			case <-ctx.Done():
 				return
 			default:
-				err := api.StreamClient.StreamLogs(p.ctx, p.onLogReceived)
-				if err != nil && err != context.Canceled {
-					// Connection lost, show error and retry
-					p.addLog(fmt.Sprintf("[red]连接错误: %v[white]", err))
-					time.Sleep(5 * time.Second)
-				}
+			}
+
+			var err error
+			if level == "" {
+				err = api.StreamClient.StreamLogs(ctx, p.onLogReceived)
+			} else {
+				err = api.StreamClient.StreamLogsWithLevel(ctx, level, p.onLogReceived)
+			}
+			if err != nil && err != context.Canceled {
+				p.addLog(fmt.Sprintf("[red]连接错误: %v[white]", err))
+				time.Sleep(5 * time.Second)
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			default:
 			}
 		}
 	}()
 }
 
-// onLogReceived handles incoming log messages
 func (p *LogsPage) onLogReceived(log *models.Log) {
+	p.mu.Lock()
+	if p.isPaused {
+		p.mu.Unlock()
+		return
+	}
+	p.mu.Unlock()
+
 	logText := p.formatLog(log)
 	p.addLog(logText)
 }
 
-// formatLog formats a log entry for display
 func (p *LogsPage) formatLog(log *models.Log) string {
 	timestamp := time.Now().Format("15:04:05")
 	if log.Time != "" {
@@ -130,59 +262,88 @@ func (p *LogsPage) formatLog(log *models.Log) string {
 		color, timestamp, color, log.Type, log.Payload)
 }
 
-// addLog adds a new log line to the display
 func (p *LogsPage) addLog(logText string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Add to logs slice
 	p.logs = append(p.logs, logText)
-
-	// Trim if exceeding max lines
 	if len(p.logs) > p.maxLines {
 		p.logs = p.logs[len(p.logs)-p.maxLines:]
 	}
 
-	// Update text view
+	p.updateTextView()
+}
+
+func (p *LogsPage) updateTextView() {
 	content := ""
 	for _, line := range p.logs {
 		content += line + "\n"
 	}
-
-	// Update UI in main goroutine
-	go func() {
+	ui.Updater.PostUi(func() {
 		p.textView.SetText(content)
-	}()
+	})
 }
 
-// Stop stops the log streaming
+func (p *LogsPage) refreshDisplay() {
+	p.mu.Lock()
+	search := strings.ToLower(p.searchText)
+	logsCopy := make([]string, len(p.logs))
+	copy(logsCopy, p.logs)
+	p.mu.Unlock()
+
+	if search == "" {
+		content := ""
+		for _, line := range logsCopy {
+			content += line + "\n"
+		}
+		ui.Updater.PostUi(func() {
+			p.textView.SetText(content)
+		})
+		return
+	}
+
+	content := ""
+	for _, line := range logsCopy {
+		lower := strings.ToLower(line)
+		if strings.Contains(lower, search) {
+			content += line + "\n"
+		}
+	}
+	ui.Updater.PostUi(func() {
+		p.textView.SetText(content)
+	})
+}
+
 func (p *LogsPage) Stop() {
-	p.cancel()
-}
-
-// Activate starts log streaming when page becomes active
-func (p *LogsPage) Activate() {
-	// Create new context for this activation
-	p.ctx, p.cancel = context.WithCancel(context.Background())
-
-	// Add activation message
-	p.addLog("[green]日志流已激活，开始接收实时日志...[white]")
-
-	// Start streaming
-	p.startLogStream()
-}
-
-// Deactivate stops log streaming when page becomes inactive
-func (p *LogsPage) Deactivate() {
-	// Cancel streaming context
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.cancel != nil {
 		p.cancel()
 	}
-	// Clear logs
-	p.Clear()
 }
 
-// Clear clears all logs
+func (p *LogsPage) Activate() {
+	p.mu.Lock()
+	wasPaused := p.isPaused
+	p.mu.Unlock()
+
+	p.ctx, p.cancel = context.WithCancel(context.Background())
+
+	p.addLog("[green]日志流已激活，开始接收实时日志...[white]")
+
+	if !wasPaused {
+		p.startLogStream()
+	}
+}
+
+func (p *LogsPage) Deactivate() {
+	p.mu.Lock()
+	if p.cancel != nil {
+		p.cancel()
+	}
+	p.mu.Unlock()
+}
+
 func (p *LogsPage) Clear() {
 	p.mu.Lock()
 	defer p.mu.Unlock()

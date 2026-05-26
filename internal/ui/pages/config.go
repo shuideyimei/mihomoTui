@@ -7,6 +7,7 @@ import (
 
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
 
@@ -22,9 +23,13 @@ type ConfigPage struct {
 	// Form components
 	form *tview.Form
 
-	// Labels
-	labels     []string
-	portLabels []string
+	// Direct field references (avoids label-based lookup)
+	apiAddrField  *tview.InputField
+	apiSecretField *tview.InputField
+	httpPortField *tview.InputField
+	socksPortField *tview.InputField
+	mixedPortField *tview.InputField
+	statusField   *tview.TextView
 
 	// Current config values
 	currentConfig *config.AppConfig
@@ -38,8 +43,6 @@ func NewConfigPage(configManager *config.Manager) *ConfigPage {
 		configManager: configManager,
 		form:          tview.NewForm(),
 		currentConfig: configManager.Get(),
-		labels:        []string{"API地址", "API密钥"},
-		portLabels:    []string{"HTTP端口", "SOCKS端口", "混合端口"},
 	}
 
 	page.setupUI()
@@ -51,14 +54,18 @@ func (c *ConfigPage) setupUI() {
 	// Configure form
 	c.setUpFormItems()
 	c.form.SetBorder(true)
-	c.form.SetTitle(" 应用配置 ")
+	c.form.SetTitle(fmt.Sprintf(" %s ", i18n.T("cfg.title")))
 	c.form.SetButtonsAlign(tview.AlignCenter)
 	c.form.SetFieldBackgroundColor(ui.ThemeInputBg)
 	c.form.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	c.form.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 
-	// Add inline status as a read-only field inside the form
-	c.form.AddTextView("状态", "[green]加载配置中...[white]", 0, 1, true, false)
+	// Add inline status as a read-only field
+	statusView := tview.NewTextView()
+	statusView.SetDynamicColors(true)
+	statusView.SetText(i18n.T("cfg.saving"))
+	c.form.AddFormItem(statusView)
+	c.statusField = statusView
 
 	// Layout: just the form
 	c.SetDirection(tview.FlexColumn)
@@ -67,28 +74,63 @@ func (c *ConfigPage) setupUI() {
 
 // setUpFormItems initializes the form items
 func (c *ConfigPage) setUpFormItems() {
-	for _, label := range c.labels {
-		c.form.AddInputField(label, "", 50, nil, nil)
-	}
+	c.apiAddrField = tview.NewInputField()
+	c.apiAddrField.SetLabel(i18n.T("cfg.api_address"))
+	c.apiAddrField.SetFieldWidth(50)
+	c.apiAddrField.SetFieldBackgroundColor(ui.ThemeInputBg)
+	c.form.AddFormItem(c.apiAddrField)
 
-	for _, label := range c.portLabels {
-		c.form.AddInputField(label, "", 10, func(textToCheck string, lastChar rune) bool {
-			if lastChar == 0 {
-				return true
-			}
-			return lastChar >= '0' && lastChar <= '9'
-		}, nil)
-	}
+	c.apiSecretField = tview.NewInputField()
+	c.apiSecretField.SetLabel(i18n.T("cfg.api_secret"))
+	c.apiSecretField.SetFieldWidth(50)
+	c.apiSecretField.SetFieldBackgroundColor(ui.ThemeInputBg)
+	c.form.AddFormItem(c.apiSecretField)
 
-	// Action buttons — styled via Form to avoid default blue focus
-	c.form.AddButton("保存", c.saveConfig)
-	c.form.AddButton("重置", c.resetConfig)
-	c.form.AddButton("测试连接", c.testConnection)
+	c.httpPortField = tview.NewInputField()
+	c.httpPortField.SetLabel(i18n.T("cfg.http_port"))
+	c.httpPortField.SetFieldWidth(10)
+	c.httpPortField.SetFieldBackgroundColor(ui.ThemeInputBg)
+	c.httpPortField.SetAcceptanceFunc(func(textToCheck string, lastChar rune) bool {
+		if lastChar == 0 {
+			return true
+		}
+		return lastChar >= '0' && lastChar <= '9'
+	})
+	c.form.AddFormItem(c.httpPortField)
+
+	c.socksPortField = tview.NewInputField()
+	c.socksPortField.SetLabel(i18n.T("cfg.socks_port"))
+	c.socksPortField.SetFieldWidth(10)
+	c.socksPortField.SetFieldBackgroundColor(ui.ThemeInputBg)
+	c.socksPortField.SetAcceptanceFunc(func(textToCheck string, lastChar rune) bool {
+		if lastChar == 0 {
+			return true
+		}
+		return lastChar >= '0' && lastChar <= '9'
+	})
+	c.form.AddFormItem(c.socksPortField)
+
+	c.mixedPortField = tview.NewInputField()
+	c.mixedPortField.SetLabel(i18n.T("cfg.mixed_port"))
+	c.mixedPortField.SetFieldWidth(10)
+	c.mixedPortField.SetFieldBackgroundColor(ui.ThemeInputBg)
+	c.mixedPortField.SetAcceptanceFunc(func(textToCheck string, lastChar rune) bool {
+		if lastChar == 0 {
+			return true
+		}
+		return lastChar >= '0' && lastChar <= '9'
+	})
+	c.form.AddFormItem(c.mixedPortField)
+
+	// Action buttons
+	c.form.AddButton(i18n.T("cfg.save_btn"), c.saveConfig)
+	c.form.AddButton(i18n.T("cfg.reset_btn"), c.resetConfig)
+	c.form.AddButton(i18n.T("cfg.test_btn"), c.testConnection)
 }
 
 // Activate activates the config page
 func (c *ConfigPage) Activate() {
-	c.setStatus("[yellow]正在加载配置...[white]")
+	c.setStatus(i18n.T("cfg.saving"))
 
 	// Load local config immediately
 	c.updateConfigForm()
@@ -98,15 +140,15 @@ func (c *ConfigPage) Activate() {
 		config, err := api.Client.GetConfig()
 		if err != nil {
 			log.Printf("failed to fetch mihomo config for ports: %v", err)
-			ui.Updater.UpdateUi(func() {
-				c.setStatus("[green]配置加载完毕[white]")
+			ui.Updater.PostUi(func() {
+				c.setStatus(i18n.T("cfg.loaded"))
 			})
 			return
 		}
 		c.mihomoConfig = config
-		ui.Updater.UpdateUi(func() {
+		ui.Updater.PostUi(func() {
 			c.updatePortFields()
-			c.setStatus("[green]配置加载完毕[white]")
+			c.setStatus(i18n.T("cfg.loaded"))
 		})
 	}()
 }
@@ -117,9 +159,8 @@ func (c *ConfigPage) Deactivate() {
 
 // updateConfigForm loads current configuration into form fields
 func (c *ConfigPage) updateConfigForm() {
-	for _, label := range c.labels {
-		c.form.GetFormItemByLabel(label).(*tview.InputField).SetText(c.currentConfig.GetValue(label))
-	}
+	c.apiAddrField.SetText(c.currentConfig.API.BaseURL)
+	c.apiSecretField.SetText(c.currentConfig.API.Secret)
 	c.updatePortFields()
 }
 
@@ -127,23 +168,23 @@ func (c *ConfigPage) updatePortFields() {
 	if c.mihomoConfig == nil {
 		return
 	}
-	setField := func(label string, value int) {
+	setField := func(field *tview.InputField, value int) {
 		if value != 0 {
-			c.form.GetFormItemByLabel(label).(*tview.InputField).SetText(strconv.Itoa(value))
+			field.SetText(strconv.Itoa(value))
 		} else {
-			c.form.GetFormItemByLabel(label).(*tview.InputField).SetText("")
+			field.SetText("")
 		}
 	}
-	setField("HTTP端口", c.mihomoConfig.Port)
-	setField("SOCKS端口", c.mihomoConfig.SocksPort)
-	setField("混合端口", c.mihomoConfig.MixedPort)
+	setField(c.httpPortField, c.mihomoConfig.Port)
+	setField(c.socksPortField, c.mihomoConfig.SocksPort)
+	setField(c.mixedPortField, c.mihomoConfig.MixedPort)
 }
 
 // saveConfig saves the configuration from form
 func (c *ConfigPage) saveConfig() {
 	// Create backup first
 	if err := c.configManager.Backup(); err != nil {
-		c.showStatus(fmt.Sprintf("[red]备份失败: %v[white]", err))
+		c.showStatus(fmt.Sprintf(i18n.T("cfg.save_fail"), err))
 		return
 	}
 
@@ -151,21 +192,20 @@ func (c *ConfigPage) saveConfig() {
 	newConfig := *c.currentConfig // Copy current config
 
 	// Update API settings from form
-	for _, value := range c.labels {
-		newConfig.SetValue(value, c.form.GetFormItemByLabel(value).(*tview.InputField).GetText())
-	}
+	newConfig.API.BaseURL = c.apiAddrField.GetText()
+	newConfig.API.Secret = c.apiSecretField.GetText()
 
 	// Validate (use a temporary manager to check config without writing)
 	tempManager := &config.Manager{}
 	tempManager.SetInMemory(&newConfig)
 	if err := tempManager.Validate(); err != nil {
-		c.showStatus(fmt.Sprintf("[red]配置无效: %v[white]", err))
+		c.showStatus(fmt.Sprintf(i18n.T("cfg.invalid_fail"), err))
 		return
 	}
 
 	// Save
 	if err := c.configManager.Set(&newConfig); err != nil {
-		c.showStatus(fmt.Sprintf("[red]保存失败: %v[white]", err))
+		c.showStatus(fmt.Sprintf(i18n.T("cfg.save_fail"), err))
 		return
 	}
 
@@ -175,48 +215,47 @@ func (c *ConfigPage) saveConfig() {
 	c.currentConfig = &newConfig
 
 	portConfig := &models.Config{
-		Port:      c.getPortFieldValue("HTTP端口"),
-		SocksPort: c.getPortFieldValue("SOCKS端口"),
-		MixedPort: c.getPortFieldValue("混合端口"),
+		Port:      c.getPortFieldValue(c.httpPortField),
+		SocksPort: c.getPortFieldValue(c.socksPortField),
+		MixedPort: c.getPortFieldValue(c.mixedPortField),
 	}
 	if err := api.Client.UpdateConfig(portConfig); err != nil {
-		c.showStatus(fmt.Sprintf("[yellow]配置已保存，但端口更新失败: %v[white]", err))
+		c.showStatus(fmt.Sprintf(i18n.T("cfg.saved_port_fail"), err))
 		return
 	}
 
-	c.showStatus("[green]配置已保存[white]")
+	c.showStatus(i18n.T("cfg.saved_ok"))
 }
 
 // resetConfig resets configuration to defaults
 func (c *ConfigPage) resetConfig() {
 	if err := c.configManager.Reset(); err != nil {
-		c.showStatus(fmt.Sprintf("[red]重置失败: %v[white]", err))
+		c.showStatus(fmt.Sprintf(i18n.T("cfg.reset_fail"), err))
 		return
 	}
 	c.currentConfig = c.configManager.Get()
 
 	api.UpdateClient(c.currentConfig.API.BaseURL, c.currentConfig.API.Secret)
-	go ui.Updater.UpdateUi(
-		func() {
+	ui.Updater.PostUi(func() {
 			// Update API
 			c.updateConfigForm()
-			c.showStatus("[yellow]配置已重置为默认值[white]")
+			c.showStatus(i18n.T("cfg.reset_ok"))
 		})
 }
 
 // testConnection tests the API connection using form values
 func (c *ConfigPage) testConnection() {
-	url := c.form.GetFormItemByLabel("API地址").(*tview.InputField).GetText()
-	secret := c.form.GetFormItemByLabel("API密钥").(*tview.InputField).GetText()
+	url := c.apiAddrField.GetText()
+	secret := c.apiSecretField.GetText()
 
 	if url == "" {
-		c.showStatus("[red]API地址不能为空[white]")
+		c.showStatus(i18n.T("cfg.api_empty"))
 		return
 	}
 
 	testBtn := c.form.GetButton(2)
 	testBtn.SetDisabled(true)
-	c.showStatus("[yellow]正在测试连接...[white]")
+	c.showStatus(i18n.T("cfg.testing"))
 
 	origURL := c.currentConfig.API.BaseURL
 	origSecret := c.currentConfig.API.Secret
@@ -226,19 +265,19 @@ func (c *ConfigPage) testConnection() {
 		defer api.UpdateClient(origURL, origSecret)
 		err := api.Client.HealthCheck()
 
-		ui.Updater.UpdateUi(func() {
+		ui.Updater.PostUi(func() {
 			testBtn.SetDisabled(false)
 			if err != nil {
-				c.showStatus(fmt.Sprintf("[red]连接失败: %v[white]", err))
+				c.showStatus(fmt.Sprintf(i18n.T("cfg.test_fail"), err))
 			} else {
-				c.showStatus("[green]连接成功![white]")
+				c.showStatus(i18n.T("cfg.test_ok"))
 			}
 		})
 	}()
 }
 
-func (c *ConfigPage) getPortFieldValue(label string) int {
-	text := c.form.GetFormItemByLabel(label).(*tview.InputField).GetText()
+func (c *ConfigPage) getPortFieldValue(field *tview.InputField) int {
+	text := field.GetText()
 	if text == "" {
 		return 0
 	}
@@ -249,11 +288,10 @@ func (c *ConfigPage) getPortFieldValue(label string) int {
 	return value
 }
 
-// setStatus updates the inline status text inside the form.
+// setStatus updates the inline status text
 func (c *ConfigPage) setStatus(message string) {
-	item := c.form.GetFormItemByLabel("状态")
-	if tv, ok := item.(*tview.TextView); ok {
-		tv.SetText(message)
+	if c.statusField != nil {
+		c.statusField.SetText(message)
 	}
 }
 

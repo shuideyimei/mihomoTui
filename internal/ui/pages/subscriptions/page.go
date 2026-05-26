@@ -10,6 +10,7 @@ import (
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
 	"mihomoTui/internal/subscription"
+	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
 
 	"github.com/gdamore/tcell/v2"
@@ -53,20 +54,20 @@ func (p *Page) setupUI() {
 	rightPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	p.detailView = tview.NewTextView()
 	p.detailView.SetBorder(true)
-	p.detailView.SetTitle(" 订阅详情 ")
+	p.detailView.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.detail_title")))
 	p.detailView.SetDynamicColors(true)
 	p.detailView.SetWordWrap(true)
 
 	p.actionBar = tview.NewFlex()
 	p.actionBar.SetBorder(true)
-	p.actionBar.SetTitle(" 操作 ")
+	p.actionBar.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.actions")))
 	p.setupActionBar()
 
 	p.status = tview.NewTextView()
 	p.status.SetBorder(true)
-	p.status.SetTitle(" 状态 ")
+	p.status.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.status")))
 	p.status.SetDynamicColors(true)
-	p.status.SetText("[green]就绪[white]")
+	p.status.SetText(i18n.T("sub.status_ready"))
 
 	rightPanel.AddItem(p.detailView, 0, 3, false)
 	rightPanel.AddItem(p.actionBar, 3, 0, false)
@@ -74,28 +75,28 @@ func (p *Page) setupUI() {
 
 	p.importForm = tview.NewForm()
 	p.importForm.SetBorder(true)
-	p.importForm.SetTitle(" 导入订阅 ")
+	p.importForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.import_title")))
 	p.importForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput = tview.NewInputField()
 	p.nameInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	p.nameInput.SetLabel("名称 ")
+	p.nameInput.SetLabel(i18n.T("sub.name_label"))
 	p.nameInput.SetFieldWidth(40)
 	p.urlInput = tview.NewInputField()
 	p.urlInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	p.urlInput.SetLabel("URL/路径 ")
+	p.urlInput.SetLabel(i18n.T("sub.url_label"))
 	p.urlInput.SetFieldWidth(60)
 	p.intervalInput = tview.NewInputField()
 	p.intervalInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	p.intervalInput.SetLabel("更新间隔(分) ")
+	p.intervalInput.SetLabel(i18n.T("sub.interval_label"))
 	p.intervalInput.SetText("1440")
 	p.intervalInput.SetFieldWidth(10)
 
 	p.importForm.AddFormItem(p.nameInput)
 	p.importForm.AddFormItem(p.urlInput)
 	p.importForm.AddFormItem(p.intervalInput)
-	p.importForm.AddButton(" 从URL导入 ", p.onImportURL)
-	p.importForm.AddButton(" 从本地导入 ", p.onImportLocal)
-	p.importForm.AddButton("  取消  ", p.onCancelImport)
+	p.importForm.AddButton(i18n.T("sub.from_url_btn"), p.onImportURL)
+	p.importForm.AddButton(i18n.T("sub.from_local_btn"), p.onImportLocal)
+	p.importForm.AddButton(i18n.T("sub.cancel_btn"), p.onCancelImport)
 	p.importForm.SetButtonsAlign(tview.AlignCenter)
 	p.importForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	p.importForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
@@ -110,13 +111,13 @@ func (p *Page) setupUI() {
 	p.SetDirection(tview.FlexRow)
 	p.AddItem(mainFlex, 0, 1, true)
 	p.SetBorder(true)
-	p.SetTitle(" 订阅管理 ")
+	p.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.title")))
 }
 
 func (p *Page) setupSubList() {
 	p.subList = tview.NewList()
 	p.subList.SetBorder(true)
-	p.subList.SetTitle(" mihomo 配置中的提供者 ")
+	p.subList.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.mihomo_providers")))
 	p.subList.SetMainTextColor(tcell.ColorWhite)
 	p.subList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
 	p.subList.SetSelectedTextColor(tcell.ColorBlack)
@@ -166,19 +167,19 @@ func (p *Page) setupActionBar() {
 	btnStyle := tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite)
 	btnFocus := tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite)
 
-	refreshBtn := tview.NewButton("[R] 刷新")
+	refreshBtn := tview.NewButton(i18n.T("sub.refresh_action"))
 	refreshBtn.SetStyle(btnStyle)
 	refreshBtn.SetActivatedStyle(btnFocus)
 	refreshBtn.SetSelectedFunc(func() { go p.refresh() })
-	importBtn := tview.NewButton("[I] 导入")
+	importBtn := tview.NewButton(i18n.T("sub.import_action"))
 	importBtn.SetStyle(btnStyle)
 	importBtn.SetActivatedStyle(btnFocus)
 	importBtn.SetSelectedFunc(p.showImportForm)
-	updateBtn := tview.NewButton("[U] 更新")
+	updateBtn := tview.NewButton(i18n.T("sub.update_action"))
 	updateBtn.SetStyle(btnStyle)
 	updateBtn.SetActivatedStyle(btnFocus)
 	updateBtn.SetSelectedFunc(func() { go p.updateSelected() })
-	deleteBtn := tview.NewButton("[D] 删除")
+	deleteBtn := tview.NewButton(i18n.T("sub.del_action"))
 	deleteBtn.SetStyle(btnStyle)
 	deleteBtn.SetActivatedStyle(btnFocus)
 	deleteBtn.SetSelectedFunc(func() { go p.deleteSelected() })
@@ -221,10 +222,10 @@ func (p *Page) onImportURL() {
 	name := strings.TrimSpace(p.nameInput.GetText())
 	url := strings.TrimSpace(p.urlInput.GetText())
 	if name == "" || url == "" {
-		p.showError("请输入名称和URL")
+		p.showError(i18n.T("sub.name_url_required"))
 		return
 	}
-	p.showStatus(fmt.Sprintf("[yellow]正在从URL导入 %s...[white]", name))
+	p.showStatus(fmt.Sprintf(i18n.T("sub.importing_url"), name))
 	go p.importFromURL(name, url)
 }
 
@@ -232,10 +233,10 @@ func (p *Page) onImportLocal() {
 	name := strings.TrimSpace(p.nameInput.GetText())
 	path := strings.TrimSpace(p.urlInput.GetText())
 	if name == "" || path == "" {
-		p.showError("请输入名称和文件路径")
+		p.showError(i18n.T("sub.name_path_required"))
 		return
 	}
-	p.showStatus(fmt.Sprintf("[yellow]正在从本地导入 %s...[white]", name))
+	p.showStatus(fmt.Sprintf(i18n.T("sub.importing_local"), name))
 	go p.importFromLocal(name, path)
 }
 
@@ -249,13 +250,13 @@ func (p *Page) onCancelImport() {
 func (p *Page) importFromURL(name, subURL string) {
 	doc, err := p.subMgr.ImportFromURL(context.Background(), subURL)
 	if err != nil {
-		p.showError(fmt.Sprintf("导入失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("sub.import_fail"), err))
 		return
 	}
 
 	configPath, cfgErr := config.AddProviderToConfig(name, subURL)
 	if cfgErr != nil {
-		p.showError(fmt.Sprintf("写入 mihomo 配置失败: %v", cfgErr))
+		p.showError(fmt.Sprintf(i18n.T("sub.config_write_fail"), cfgErr))
 		return
 	}
 	if err := api.Client.ReloadConfig(configPath); err != nil {
@@ -266,7 +267,7 @@ func (p *Page) importFromURL(name, subURL string) {
 
 	providers, err := config.GetMihomoProxyProviders()
 	if err != nil {
-		p.showError(fmt.Sprintf("读取 mihomo 配置失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("sub.config_read_fail"), err))
 		return
 	}
 
@@ -283,14 +284,14 @@ func (p *Page) importFromURL(name, subURL string) {
 		p.urlInput.SetText("")
 		p.intervalInput.SetText("1440")
 		p.updateSubList()
-		p.status.SetText(fmt.Sprintf("[green]已导入 %s (%d 个节点)[white]", name, len(doc.Proxies)))
+		p.status.SetText(fmt.Sprintf(i18n.T("sub.import_ok"), name, len(doc.Proxies)))
 	})
 }
 
 func (p *Page) importFromLocal(name, path string) {
 	doc, err := p.subMgr.ImportFromLocal(path)
 	if err != nil {
-		p.showError(fmt.Sprintf("导入失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("sub.import_fail"), err))
 		return
 	}
 
@@ -307,7 +308,7 @@ func (p *Page) importFromLocal(name, path string) {
 		p.nameInput.SetText("")
 		p.urlInput.SetText("")
 		p.intervalInput.SetText("1440")
-		p.status.SetText(fmt.Sprintf("[yellow]本地文件 %s 解析成功 (%d 个节点)[white]\n[gray]本地导入不会写入 mihomo 配置，请手动编辑配置或使用 URL 导入[white]", name, len(doc.Proxies)))
+		p.status.SetText(fmt.Sprintf(i18n.T("sub.import_ok_local"), name, len(doc.Proxies)))
 	})
 }
 
@@ -315,34 +316,34 @@ func (p *Page) updateSelected() {
 	p.mu.Lock()
 	if p.selectedIndex < 0 || p.selectedIndex >= len(p.providers) {
 		p.mu.Unlock()
-		p.showError("请先选择一个提供者")
+		p.showError(i18n.T("sub.select_first"))
 		return
 	}
 	pv := p.providers[p.selectedIndex]
 	p.mu.Unlock()
 
 	if pv.URL == "" {
-		p.showError("该提供者没有 URL，无法更新")
+		p.showError(i18n.T("sub.no_url"))
 		return
 	}
 
-	p.showStatus(fmt.Sprintf("[yellow]正在更新 %s...[white]", pv.Name))
+	p.showStatus(fmt.Sprintf(i18n.T("sub.updating"), pv.Name))
 
 	doc, err := p.subMgr.ImportFromURL(context.Background(), pv.URL)
 	if err != nil {
-		p.showError(fmt.Sprintf("更新失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("sub.update_fail"), err))
 		return
 	}
 
 	_, cfgErr := config.AddProviderToConfig(pv.Name, pv.URL)
 	if cfgErr != nil {
-		p.showError(fmt.Sprintf("更新 mihomo 配置失败: %v", cfgErr))
+		p.showError(fmt.Sprintf(i18n.T("sub.config_write_fail"), cfgErr))
 		return
 	}
 
 	providers, err := config.GetMihomoProxyProviders()
 	if err != nil {
-		p.showError(fmt.Sprintf("读取配置失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("sub.config_read_fail"), err))
 		return
 	}
 
@@ -351,7 +352,7 @@ func (p *Page) updateSelected() {
 		p.providers = providers
 		p.mu.Unlock()
 		p.updateSubList()
-		p.status.SetText(fmt.Sprintf("[green]%s 已更新 (%d 个节点)[white]", pv.Name, len(doc.Proxies)))
+		p.status.SetText(fmt.Sprintf(i18n.T("sub.update_ok"), pv.Name, len(doc.Proxies)))
 	})
 }
 
@@ -359,14 +360,14 @@ func (p *Page) deleteSelected() {
 	p.mu.Lock()
 	if p.selectedIndex < 0 || p.selectedIndex >= len(p.providers) {
 		p.mu.Unlock()
-		p.showError("请先选择一个提供者")
+		p.showError(i18n.T("sub.select_first"))
 		return
 	}
 	pv := p.providers[p.selectedIndex]
 	p.mu.Unlock()
 
 	if err := config.RemoveProviderFromConfig(pv.Name); err != nil {
-		p.showError(fmt.Sprintf("删除失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("sub.delete_fail"), err))
 		return
 	}
 
@@ -377,7 +378,7 @@ func (p *Page) deleteSelected() {
 
 	providers, err := config.GetMihomoProxyProviders()
 	if err != nil {
-		p.showError(fmt.Sprintf("读取配置失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("sub.config_read_fail"), err))
 		return
 	}
 
@@ -386,14 +387,14 @@ func (p *Page) deleteSelected() {
 		p.providers = providers
 		p.mu.Unlock()
 		p.updateSubList()
-		p.status.SetText(fmt.Sprintf("[green]已从 mihomo 配置中移除 %s[white]", pv.Name))
+		p.status.SetText(fmt.Sprintf(i18n.T("sub.del_ok"), pv.Name))
 	})
 }
 
 func (p *Page) refresh() {
 	providers, err := config.GetMihomoProxyProviders()
 	if err != nil {
-		p.showError(fmt.Sprintf("读取 mihomo 配置失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("sub.config_read_fail"), err))
 		return
 	}
 	go ui.Updater.UpdateUi(func() {
@@ -411,28 +412,28 @@ func (p *Page) updateSubList() {
 	p.mu.Unlock()
 
 	if len(providers) == 0 {
-		p.subList.AddItem("(暂无配置)", "按 I 键导入订阅到 mihomo 配置", 0, nil)
+		p.subList.AddItem(i18n.T("sub.empty_list"), i18n.T("sub.add_hint"), 0, nil)
 		return
 	}
 
 	for _, pv := range providers {
 		sec := pv.URL
 		if sec == "" {
-			sec = "本地"
+			sec = i18n.T("sub.local_tag")
 		}
 		if pv.Interval > 0 {
-			sec += fmt.Sprintf(" | 更新间隔: %d分", pv.Interval)
+			sec += fmt.Sprintf(i18n.T("sub.interval_min"), pv.Interval)
 		}
-		p.subList.AddItem(pv.Name, sec, 0, nil)
+		p.subList.AddItem(ui.StripFlagEmoji(pv.Name), sec, 0, nil)
 	}
 }
 
 func (p *Page) showDetail(pv config.ProviderInfo) {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("[yellow]名称:[white] %s\n", pv.Name))
+	b.WriteString(fmt.Sprintf(i18n.T("sub.detail_name"), ui.StripFlagEmoji(pv.Name)))
 	b.WriteString(fmt.Sprintf("[yellow]URL:[white] %s\n", pv.URL))
-	b.WriteString(fmt.Sprintf("[yellow]更新间隔:[white] %d 分钟\n", pv.Interval))
-	b.WriteString(fmt.Sprintf("\n[gray]此提供者存在于 mihomo 配置文件中[white]\n"))
+	b.WriteString(fmt.Sprintf(i18n.T("sub.detail_interval"), pv.Interval))
+	b.WriteString(i18n.T("sub.detail_in_config"))
 	p.detailView.SetText(b.String())
 }
 

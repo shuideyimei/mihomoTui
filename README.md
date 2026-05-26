@@ -8,6 +8,26 @@ English | [简体中文](README_ZH.md)
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="picture/截屏2026-05-26%2014.50.55.png" alt="Dashboard" width="49%">
+  <img src="picture/截屏2026-05-26%2014.51.07.png" alt="Proxies" width="49%">
+</p>
+<p align="center">
+  <img src="picture/截屏2026-05-26%2015.02.30.png" alt="Connections" width="49%">
+  <img src="picture/截屏2026-05-26%2015.02.45.png" alt="Rules" width="49%">
+</p>
+<p align="center">
+  <img src="picture/截屏2026-05-26%2015.03.12.png" alt="Logs" width="49%">
+  <img src="picture/截屏2026-05-26%2015.03.26.png" alt="Subscriptions" width="49%">
+</p>
+<p align="center">
+  <img src="picture/截屏2026-05-26%2015.03.42.png" alt="Proxy Groups" width="49%">
+</p>
+
+---
+
 ## Features
 
 - 🖥️ **Modern Terminal UI** — Beautiful interface built with [tview](https://github.com/rivo/tview)

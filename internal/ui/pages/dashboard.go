@@ -4,14 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
+	"sync"
+	"time"
+
 	"mihomoTui/internal/api"
+	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
 	"mihomoTui/internal/ui/components"
 	"mihomoTui/internal/utils"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -83,32 +85,32 @@ func (d *DashboardPage) setupLayout() {
 	d.AddItem(rightCol, 0, 2, true)
 
 	d.SetBorder(true)
-	d.SetTitle(" 仪表板 ")
+	d.SetTitle(fmt.Sprintf(" %s ", i18n.T("dash.title")))
 }
 
 // createConnectionsBox creates the connections statistics component
 func (d *DashboardPage) createConnectionsBox() {
 	d.connectionsBox = tview.NewTextView()
 	d.connectionsBox.SetBorder(true)
-	d.connectionsBox.SetTitle(" 连接统计 ")
+	d.connectionsBox.SetTitle(fmt.Sprintf(" %s ", i18n.T("dash.conn_stats")))
 	d.connectionsBox.SetDynamicColors(true)
-	d.connectionsBox.SetText("正在获取连接数据...")
+	d.connectionsBox.SetText(i18n.T("dash.fetching_conn"))
 }
 
 // createSystemInfoBox creates the system resource monitoring component
 func (d *DashboardPage) createSystemInfoBox() {
 	d.systemInfoBox = tview.NewTextView()
 	d.systemInfoBox.SetBorder(true)
-	d.systemInfoBox.SetTitle(" 系统信息 ")
+	d.systemInfoBox.SetTitle(fmt.Sprintf(" %s ", i18n.T("dash.sys_info")))
 	d.systemInfoBox.SetDynamicColors(true)
-	d.systemInfoBox.SetText("正在获取系统信息...")
+	d.systemInfoBox.SetText(i18n.T("dash.fetching_sys"))
 }
 
 // createControlButtons creates the control buttons component
 func (d *DashboardPage) createControlButtons() {
 	d.controlButtons = tview.NewFlex()
 	d.controlButtons.SetBorder(true)
-	d.controlButtons.SetTitle(" 控制面板 ")
+	d.controlButtons.SetTitle(fmt.Sprintf(" %s ", i18n.T("dash.control_panel")))
 	d.controlButtons.SetDirection(tview.FlexRow)
 
 	// Create buttons row
@@ -137,7 +139,7 @@ func (d *DashboardPage) createControlButtons() {
 	// Create status text view for mode and port info
 	d.statusText = tview.NewTextView()
 	d.statusText.SetDynamicColors(true)
-	d.statusText.SetText("正在获取状态信息...")
+	d.statusText.SetText(i18n.T("dash.fetching_status"))
 
 	// Add to main control panel
 	d.controlButtons.AddItem(buttonsRow, 1, 0, true)
@@ -161,9 +163,9 @@ func (d *DashboardPage) createControlButtons() {
 func (d *DashboardPage) createOperationStatus() {
 	d.operationStatus = tview.NewTextView()
 	d.operationStatus.SetBorder(true)
-	d.operationStatus.SetTitle(" 操作状态 ")
+	d.operationStatus.SetTitle(fmt.Sprintf(" %s ", i18n.T("dash.control_panel")))
 	d.operationStatus.SetDynamicColors(true)
-	d.operationStatus.SetText("[white]就绪[white]")
+	d.operationStatus.SetText(i18n.T("dash.status_ready"))
 }
 
 // Activate activates the dashboard page
@@ -210,7 +212,7 @@ func (d *DashboardPage) updateConnectionsData() {
 	connections, err := api.Client.GetConnections()
 	if err != nil {
 		ui.Updater.PostUi(func() {
-			d.connectionsBox.SetText(fmt.Sprintf("[red]获取连接数据失败: %v[white]", err))
+			d.connectionsBox.SetText(fmt.Sprintf(i18n.T("dash.conn_fetch_fail"), err))
 		})
 		return
 	}
@@ -233,7 +235,7 @@ func (d *DashboardPage) updateConnectionsDisplay() {
 	}
 
 	totalConnections := len(connections)
-	content := fmt.Sprintf("总连接数: %d", totalConnections)
+	content := fmt.Sprintf(i18n.T("dash.total_conn"), totalConnections)
 	ui.Updater.PostUi(func() {
 		d.connectionsBox.SetText(content)
 	})
@@ -323,32 +325,32 @@ func (d *DashboardPage) buildStatusText(config *models.Config) string {
 		modeColor = "[white]"
 	}
 
-	fmt.Fprintf(&contentBuilder, "模式 [%s]%s[white]\n", modeColor, config.Mode)
+	fmt.Fprint(&contentBuilder, fmt.Sprintf(i18n.T("dash.mode_label"), modeColor, config.Mode))
 
-	fmt.Fprintf(&contentBuilder, "端口状态")
+	fmt.Fprint(&contentBuilder, i18n.T("dash.port_status"))
 	hasPort := false
 	if config.Port != 0 {
-		fmt.Fprintf(&contentBuilder, " | HTTP: %d", config.Port)
+		fmt.Fprint(&contentBuilder, fmt.Sprintf(i18n.T("dash.http_port"), config.Port))
 		hasPort = true
 	}
 	if config.SocksPort != 0 {
-		fmt.Fprintf(&contentBuilder, " | SOCKS: %d", config.SocksPort)
+		fmt.Fprint(&contentBuilder, fmt.Sprintf(i18n.T("dash.socks_port"), config.SocksPort))
 		hasPort = true
 	}
 	if config.MixedPort != 0 {
-		fmt.Fprintf(&contentBuilder, " | Mixed: %d", config.MixedPort)
+		fmt.Fprint(&contentBuilder, fmt.Sprintf(i18n.T("dash.mixed_port"), config.MixedPort))
 		hasPort = true
 	}
 	if config.RedirPort != 0 {
-		fmt.Fprintf(&contentBuilder, " | Redir: %d", config.RedirPort)
+		fmt.Fprint(&contentBuilder, fmt.Sprintf(i18n.T("dash.redir_port"), config.RedirPort))
 		hasPort = true
 	}
 	if config.TProxyPort != 0 {
-		fmt.Fprintf(&contentBuilder, " | TProxy: %d", config.TProxyPort)
+		fmt.Fprint(&contentBuilder, fmt.Sprintf(i18n.T("dash.tproxy_port"), config.TProxyPort))
 		hasPort = true
 	}
 	if !hasPort {
-		contentBuilder.WriteString("  无活动端口")
+		contentBuilder.WriteString(i18n.T("dash.no_active_port"))
 	}
 
 	return contentBuilder.String()
@@ -362,7 +364,7 @@ func (d *DashboardPage) showOperationStatus(message string) {
 	go func() {
 		time.Sleep(3 * time.Second)
 		ui.Updater.PostUi(func() {
-			d.operationStatus.SetText("[white]就绪[white]")
+			d.operationStatus.SetText(i18n.T("dash.status_ready"))
 		})
 	}()
 }
@@ -378,7 +380,7 @@ func (d *DashboardPage) updateSystemInfo() {
 		memUsage = "-"
 	}
 	d.mutex.RUnlock()
-	fmt.Fprintf(&content, "内存使用: %s", memUsage)
+	fmt.Fprint(&content, fmt.Sprintf(i18n.T("dash.memory_usage"), memUsage))
 
 	ui.Updater.PostUi(func() {
 		d.systemInfoBox.SetText(content.String())
@@ -448,12 +450,12 @@ func (d *DashboardPage) toggleAllowLan() {
 	d.mutex.RUnlock()
 
 	if config == nil {
-		d.showOperationStatus("[red]错误: 无配置数据[white]")
+		d.showOperationStatus(i18n.T("dash.no_config_err"))
 		return
 	}
 
 	// Show operation in progress
-	d.showOperationStatus("[yellow]正在切换 AllowLAN...[white]")
+	d.showOperationStatus(i18n.T("dash.toggling_lan"))
 
 	// Create a new config with toggled Allow LAN setting
 	newConfig := *config // Copy existing config
@@ -463,16 +465,16 @@ func (d *DashboardPage) toggleAllowLan() {
 	err := api.Client.UpdateConfig(&newConfig)
 
 	if err != nil {
-		d.showOperationStatus(fmt.Sprintf("[red]AllowLAN 切换失败: %v[white]", err))
+		d.showOperationStatus(fmt.Sprintf(i18n.T("dash.lan_toggle_fail"), err))
 		log.Printf("Failed to toggle Allow LAN: %v", err)
 		return
 	}
 
-	status := "关闭"
+	status := i18n.T("dash.lan_off_label")
 	if newConfig.AllowLan {
-		status = "开启"
+		status = i18n.T("dash.lan_on_label")
 	}
-	d.showOperationStatus(fmt.Sprintf("[green]AllowLAN 已%s[white]", status))
+	d.showOperationStatus(fmt.Sprintf(i18n.T("dash.lan_toggled"), status))
 	log.Printf("Allow LAN toggled to: %v", newConfig.AllowLan)
 
 	// Refresh data to show updated status
@@ -486,12 +488,12 @@ func (d *DashboardPage) toggleTun() {
 	d.mutex.RUnlock()
 
 	if config == nil {
-		d.showOperationStatus("[red]错误: 无配置数据[white]")
+		d.showOperationStatus(i18n.T("dash.no_config_err"))
 		return
 	}
 
 	// Show operation in progress
-	d.showOperationStatus("[yellow]正在切换 TUN...[white]")
+	d.showOperationStatus(i18n.T("dash.toggling_tun"))
 
 	// Create a new config with toggled TUN setting
 	newConfig := *config // Copy existing config
@@ -515,16 +517,16 @@ func (d *DashboardPage) toggleTun() {
 	err := api.Client.UpdateConfig(&newConfig)
 
 	if err != nil {
-		d.showOperationStatus(fmt.Sprintf("[red]TUN 切换失败: %v[white]", err))
+		d.showOperationStatus(fmt.Sprintf(i18n.T("dash.tun_toggle_fail"), err))
 		log.Printf("Failed to toggle TUN: %v", err)
 		return
 	}
 
-	status := "关闭"
+	status := i18n.T("dash.tun_off_label")
 	if newTunEnabled {
-		status = "开启"
+		status = i18n.T("dash.tun_on_label")
 	}
-	d.showOperationStatus(fmt.Sprintf("[green]TUN 已%s[white]", status))
+	d.showOperationStatus(fmt.Sprintf(i18n.T("dash.tun_toggled"), status))
 	log.Printf("TUN toggled to: %v", newTunEnabled)
 
 	// Refresh data to show updated status

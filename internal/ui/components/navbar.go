@@ -1,6 +1,7 @@
 package components
 
 import (
+	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
 
 	"github.com/gdamore/tcell/v2"
@@ -29,17 +30,17 @@ func NewNavBar() *NavBar {
 	n := &NavBar{
 		Flex: tview.NewFlex(),
 		items: []NavItem{
-			{Name: "仪表板", Shortcut: "D"},
-			{Name: "代理", Shortcut: "P"},
-			{Name: "连接", Shortcut: "R"},
-			{Name: "配置", Shortcut: "C"},
-			{Name: "日志", Shortcut: "L"},
-			{Name: "订阅", Shortcut: "S"},
-			{Name: "代理组", Shortcut: "G"},
-			{Name: "规则", Shortcut: "U"},
-			{Name: "规则提供者", Shortcut: "T"},
-			{Name: "设置", Shortcut: "K"},
-			{Name: "配置管理", Shortcut: "M"},
+			{Name: i18n.T("nav.dashboard"), Shortcut: "D"},
+			{Name: i18n.T("nav.proxies"), Shortcut: "P"},
+			{Name: i18n.T("nav.connections"), Shortcut: "R"},
+			{Name: i18n.T("nav.config"), Shortcut: "C"},
+			{Name: i18n.T("nav.logs"), Shortcut: "L"},
+			{Name: i18n.T("nav.subscriptions"), Shortcut: "S"},
+			{Name: i18n.T("nav.proxygroups"), Shortcut: "G"},
+			{Name: i18n.T("nav.rules"), Shortcut: "U"},
+			{Name: i18n.T("nav.ruleproviders"), Shortcut: "T"},
+			{Name: i18n.T("nav.settings"), Shortcut: "K"},
+			{Name: i18n.T("nav.configmgr"), Shortcut: "M"},
 		},
 		currentIndex: 0,
 	}
@@ -110,7 +111,7 @@ func (n *NavBar) onItemSelected(index int) {
 		return
 	}
 	n.currentIndex = index
-	n.highlightCurrent()
+	// highlightCurrent is called by SelectItem (invoked in switchPage)
 	if n.onSelect != nil {
 		n.onSelect(index, n.items[index].Name)
 	}

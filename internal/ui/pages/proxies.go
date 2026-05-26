@@ -4,14 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"mihomoTui/internal/api"
-	"mihomoTui/internal/models"
-	"mihomoTui/internal/ui"
-	"mihomoTui/internal/ui/components"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"mihomoTui/internal/api"
+	"mihomoTui/internal/i18n"
+	"mihomoTui/internal/models"
+	"mihomoTui/internal/ui"
+	"mihomoTui/internal/ui/components"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -88,9 +90,9 @@ func (p *ProxiesPage) Activate() {
 	// Load data and start auto-refresh in background
 	go func() {
 		p.loadProvidersData()
-		ui.Updater.UpdateUi(func() {
+		ui.Updater.PostUi(func() {
 			p.updateGroupsList()
-			p.statusText.SetText("加载完成")
+			p.statusText.SetText(i18n.T("proxy.loaded"))
 		})
 	}()
 
@@ -145,24 +147,24 @@ func (p *ProxiesPage) setupLayout() {
 	p.AddItem(rightPanel, 0, 2, false)
 
 	p.SetBorder(true)
-	p.SetTitle(" 代理管理 ")
+	p.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.title")))
 }
 
 // createStatusText creates the status display
 func (p *ProxiesPage) createStatusText() {
 	p.statusText = tview.NewTextView()
 	p.statusText.SetBorder(true)
-	p.statusText.SetTitle(" 状态 ")
+	p.statusText.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.status")))
 	p.statusText.SetDynamicColors(true)
-	p.statusText.SetText("加载中...")
+	p.statusText.SetText(i18n.T("proxy.loading"))
 }
 
 // createSearchInput creates the search input for filtering nodes
 func (p *ProxiesPage) createSearchInput() {
 	p.searchInput = tview.NewInputField()
 	p.searchInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	p.searchInput.SetLabel("搜索: ")
-	p.searchInput.SetPlaceholder("搜索节点...")
+	p.searchInput.SetLabel(i18n.T("proxy.search"))
+	p.searchInput.SetPlaceholder(i18n.T("proxy.search_placeholder"))
 	p.searchInput.SetChangedFunc(func(text string) {
 		p.filterText = text
 		p.updateNodesListContent()
@@ -183,7 +185,7 @@ func (p *ProxiesPage) createSearchInput() {
 func (p *ProxiesPage) createGroupsList() {
 	p.groupsList = tview.NewList()
 	p.groupsList.SetBorder(true)
-	p.groupsList.SetTitle(" 代理组 ")
+	p.groupsList.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.group_select")))
 	p.groupsList.SetMainTextColor(tcell.ColorWhite)
 	p.groupsList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
 	p.groupsList.SetSelectedTextColor(tcell.ColorBlack)
@@ -199,7 +201,7 @@ func (p *ProxiesPage) createGroupsList() {
 func (p *ProxiesPage) createSwitchButtons() {
 	p.switchButtons = tview.NewFlex()
 	p.switchButtons.SetBorder(true)
-	p.switchButtons.SetTitle(" 模式切换 ")
+	p.switchButtons.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.mode_switch")))
 
 	// Create buttons for rule, global, direct modes
 	p.ruleBtn = tview.NewButton("Rule")
@@ -290,7 +292,7 @@ func (p *ProxiesPage) syncModeFromStatusBar() {
 			p.currentMode = strings.ToLower(currentMode)
 		}
 		// Update button highlights
-		ui.Updater.UpdateUi(func() {
+		ui.Updater.PostUi(func() {
 			p.updateButtonStyles()
 		})
 	}
@@ -300,11 +302,11 @@ func (p *ProxiesPage) syncModeFromStatusBar() {
 func (p *ProxiesPage) createNodesList() {
 	p.nodesList = tview.NewTable().SetFixed(1, 0)
 	p.nodesList.SetBorder(true)
-	p.nodesList.SetTitle(" 代理节点 ")
+	p.nodesList.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.node_list")))
 	p.nodesList.SetSelectable(true, false)
 
 	// Set table headers
-	headers := []string{"节点名称", "类型", "延迟", "状态"}
+	headers := []string{i18n.T("proxy.node_name"), i18n.T("proxy.node_type"), i18n.T("proxy.node_delay"), i18n.T("proxy.node_status")}
 	for i, header := range headers {
 		cell := tview.NewTableCell(header).
 			SetTextColor(tcell.ColorGray).
@@ -476,10 +478,10 @@ func (p *ProxiesPage) updateGroupsList() {
 	for _, group := range groups {
 		secondaryText := ""
 		if group.Now != "" {
-			secondaryText = fmt.Sprintf("当前: %s", group.Now)
+			secondaryText = fmt.Sprintf(i18n.T("proxy.current"), ui.StripFlagEmoji(group.Now))
 		}
 
-		mainText := fmt.Sprintf("[%s] %s", group.Type, group.Name)
+		mainText := fmt.Sprintf("[%s] %s", group.Type, ui.StripFlagEmoji(group.Name))
 		p.groupsList.AddItem(mainText, secondaryText, 0, nil)
 	}
 
@@ -531,7 +533,7 @@ func (p *ProxiesPage) updateNodesListContent() {
 	p.nodesList.Clear()
 
 	// Re-add headers
-	headers := []string{"节点名称", "类型", "延迟", "状态"}
+	headers := []string{i18n.T("proxy.node_name"), i18n.T("proxy.node_type"), i18n.T("proxy.node_delay"), i18n.T("proxy.node_status")}
 	for i, header := range headers {
 		cell := tview.NewTableCell(header).
 			SetTextColor(tcell.ColorGray).
@@ -549,7 +551,7 @@ func (p *ProxiesPage) updateNodesListContent() {
 	// If still no nodes, show empty state
 	if len(allNodes) == 0 {
 		log.Printf("updateNodesListContent: no nodes found for group %q, showing empty state", p.selectedGroup)
-		emptyCell := tview.NewTableCell("  (无可用节点)  ").SetTextColor(tcell.ColorGray).SetAlign(tview.AlignCenter)
+		emptyCell := tview.NewTableCell(i18n.T("proxy.no_nodes")).SetTextColor(tcell.ColorGray).SetAlign(tview.AlignCenter)
 		p.nodesList.SetCell(1, 0, emptyCell)
 		p.nodesList.SetCell(1, 1, tview.NewTableCell("-").SetTextColor(tcell.ColorGray).SetAlign(tview.AlignCenter))
 		p.nodesList.SetCell(1, 2, tview.NewTableCell("-").SetTextColor(tcell.ColorGray).SetAlign(tview.AlignCenter))
@@ -590,10 +592,10 @@ func (p *ProxiesPage) updateNodesListContent() {
 		}
 
 		// Name cell
-		nameText := name
+		nameText := ui.StripFlagEmoji(name)
 		nameColor := tcell.ColorWhite
 		if name == selectedGroupProxy.Now {
-			nameText = "✓ " + name
+			nameText = "✓ " + ui.StripFlagEmoji(name)
 			nameColor = tcell.ColorGreen
 		}
 
@@ -639,7 +641,7 @@ func (p *ProxiesPage) updateNodesListContent() {
 						delayColor = tcell.ColorDarkGray
 					}
 				} else if delay == 0 {
-					delayText = "超时"
+					delayText = i18n.T("proxy.delay_timeout")
 					delayColor = tcell.ColorDarkGray
 				}
 			}
@@ -659,7 +661,7 @@ func (p *ProxiesPage) updateNodesListContent() {
 						delayColor = tcell.ColorDarkGray
 					}
 				} else {
-					delayText = "超时"
+					delayText = i18n.T("proxy.delay_timeout")
 					delayColor = tcell.ColorDarkGray
 				}
 			}
@@ -739,13 +741,13 @@ func (p *ProxiesPage) switchMode(mode string) {
 		return // Already in this mode
 	}
 
-	p.showInfo(fmt.Sprintf("正在切换到 %s 模式...", mode))
+	p.showInfo(fmt.Sprintf(i18n.T("proxy.switching_mode"), mode))
 
 	go func() {
 		// Get current config
 		config, err := api.Client.GetConfig()
 		if err != nil {
-			p.showError(fmt.Sprintf("获取配置失败: %v", err))
+			p.showError(fmt.Sprintf(i18n.T("proxy.fetch_fail"), err))
 			return
 		}
 
@@ -753,7 +755,7 @@ func (p *ProxiesPage) switchMode(mode string) {
 		config.Mode = mode
 		err = api.Client.UpdateConfig(config)
 		if err != nil {
-			p.showError(fmt.Sprintf("切换模式失败: %v", err))
+			p.showError(fmt.Sprintf(i18n.T("proxy.mode_switch_fail"), err))
 			return
 		}
 
@@ -764,11 +766,11 @@ func (p *ProxiesPage) switchMode(mode string) {
 		ui.Updater.UpdateStatusBarConfig(config)
 
 		// Update button colors
-		go ui.Updater.UpdateUi(func() {
+		ui.Updater.PostUi(func() {
 			p.updateButtonStyles()
 		})
 
-		p.showSuccess(fmt.Sprintf("已切换到 %s 模式", mode))
+		p.showSuccess(fmt.Sprintf(i18n.T("proxy.mode_switched"), mode))
 		log.Printf("Switched to mode: %s", mode)
 	}()
 }
@@ -782,11 +784,11 @@ func (p *ProxiesPage) selectCurrentNode() {
 	go func() {
 		err := api.Client.SelectProxy(p.selectedGroup, p.selectedNode)
 		if err != nil {
-			p.showError(fmt.Sprintf("切换代理失败: %v", err))
+			p.showError(fmt.Sprintf(i18n.T("proxy.switching_proxy"), err))
 			return
 		}
 
-		p.showSuccess(fmt.Sprintf("已切换到代理: %s", p.selectedNode))
+		p.showSuccess(fmt.Sprintf(i18n.T("proxy.switched_proxy"), p.selectedNode))
 
 		// Update current selection in proxyGroups
 		p.mutex.Lock()
@@ -799,7 +801,7 @@ func (p *ProxiesPage) selectCurrentNode() {
 		p.mutex.Unlock()
 
 		// Update UI to reflect the change
-		go ui.Updater.UpdateUi(func() {
+		ui.Updater.PostUi(func() {
 			p.updateGroupsList()
 			p.updateNodesListContent()
 		})
@@ -816,7 +818,7 @@ func (p *ProxiesPage) testGroupDelay() {
 
 	p.isTestingDelay = true
 	p.delayMu.Unlock()
-	p.showInfo("正在测试组内所有节点延迟...")
+	p.showInfo(i18n.T("proxy.testing_delay_group"))
 
 	go func() {
 		defer func() {
@@ -827,11 +829,11 @@ func (p *ProxiesPage) testGroupDelay() {
 
 		delays, err := api.Client.TestGroupDelay(p.selectedGroup, "http://www.gstatic.com/generate_204", 3000)
 		if err != nil {
-			p.showError(fmt.Sprintf("组延迟测试失败: %v", err))
+			p.showError(fmt.Sprintf(i18n.T("proxy.delay_test_fail"), err))
 			return
 		}
 
-		p.showSuccess("组延迟测试完成")
+		p.showSuccess(i18n.T("proxy.delay_done"))
 
 		// Store delays and update UI
 		p.mutex.Lock()
@@ -841,7 +843,7 @@ func (p *ProxiesPage) testGroupDelay() {
 		p.groupDelays[p.selectedGroup] = delays
 		p.mutex.Unlock()
 
-		go ui.Updater.UpdateUi(func() {
+		ui.Updater.PostUi(func() {
 			p.updateNodesListContent()
 		})
 	}()
@@ -857,7 +859,7 @@ func (p *ProxiesPage) testSelectedNodeDelay() {
 
 	p.isTestingDelay = true
 	p.delayMu.Unlock()
-	p.showInfo(fmt.Sprintf("正在测试 %s 延迟...", p.selectedNode))
+	p.showInfo(fmt.Sprintf(i18n.T("proxy.testing_delay_node"), p.selectedNode))
 
 	go func() {
 		defer func() {
@@ -868,12 +870,12 @@ func (p *ProxiesPage) testSelectedNodeDelay() {
 
 		delay, err := api.Client.TestProxyDelay(p.selectedNode, "http://www.gstatic.com/generate_204", 5000)
 		if err != nil {
-			p.showError(fmt.Sprintf("延迟测试失败: %v", err))
+			p.showError(fmt.Sprintf(i18n.T("proxy.delay_test_fail"), err))
 			return
 		}
 
 		if delay > 0 {
-			p.showSuccess(fmt.Sprintf("%s 延迟: %dms", p.selectedNode, delay))
+			p.showSuccess(fmt.Sprintf(i18n.T("proxy.delay_result"), p.selectedNode, delay))
 
 			// Update delay in data structure directly
 			p.mutex.Lock()
@@ -904,11 +906,11 @@ func (p *ProxiesPage) testSelectedNodeDelay() {
 			}
 			p.mutex.Unlock()
 
-			go ui.Updater.UpdateUi(func() {
+			ui.Updater.PostUi(func() {
 				p.updateNodesListContent()
 			})
 		} else {
-			p.showError(fmt.Sprintf("%s 延迟测试超时", p.selectedNode))
+			p.showError(fmt.Sprintf(i18n.T("proxy.delay_timeout_msg"), p.selectedNode))
 		}
 	}()
 }
@@ -919,10 +921,10 @@ func (p *ProxiesPage) Refresh() {
 		return
 	}
 
-	p.showInfo("正在刷新代理数据...")
+	p.showInfo(i18n.T("proxy.refreshing"))
 	p.loadProvidersData()
 
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.updateGroupsList()
 	})
 }
@@ -955,7 +957,7 @@ func (p *ProxiesPage) startAutoRefresh() {
 				p.loadProvidersData()
 
 				// Update UI with new data
-				ui.Updater.UpdateUi(func() {
+				ui.Updater.PostUi(func() {
 					p.updateGroupsList()
 					if p.selectedGroup != "" {
 						p.updateNodesListContent()
@@ -985,8 +987,8 @@ func (p *ProxiesPage) Stop() {
 func (p *ProxiesPage) showError(message string) {
 	log.Printf("Error: %s", message)
 	if p.statusText != nil {
-		go ui.Updater.UpdateUi(func() {
-			p.statusText.SetText(fmt.Sprintf("[red]错误:[white] %s", message))
+		ui.Updater.PostUi(func() {
+			p.statusText.SetText(fmt.Sprintf("[red]%s[white] %s", i18n.T("common.error"), message))
 		})
 	}
 }
@@ -995,8 +997,8 @@ func (p *ProxiesPage) showError(message string) {
 func (p *ProxiesPage) showSuccess(message string) {
 	log.Printf("Success: %s", message)
 	if p.statusText != nil {
-		go ui.Updater.UpdateUi(func() {
-			p.statusText.SetText(fmt.Sprintf("[green]成功:[white] %s", message))
+		ui.Updater.PostUi(func() {
+			p.statusText.SetText(fmt.Sprintf("[green]%s[white] %s", i18n.T("common.success"), message))
 		})
 	}
 }
@@ -1005,8 +1007,8 @@ func (p *ProxiesPage) showSuccess(message string) {
 func (p *ProxiesPage) showInfo(message string) {
 	log.Printf("Info: %s", message)
 	if p.statusText != nil {
-		go ui.Updater.UpdateUi(func() {
-			p.statusText.SetText(fmt.Sprintf("[yellow]信息:[white] %s", message))
+		ui.Updater.PostUi(func() {
+			p.statusText.SetText(fmt.Sprintf("[yellow]%s[white] %s", i18n.T("common.info"), message))
 		})
 	}
 }
@@ -1052,7 +1054,7 @@ func (p *ProxiesPage) initializeNavigation() {
 
 		switch event.Rune() {
 		case 'h', 'H':
-			p.showInfo("使用 TAB 切换组件，使用方向键移动选择")
+			p.showInfo(i18n.T("proxy.info_tab_hint"))
 			return nil
 		case 'r', 'R':
 			p.testSelectedNodeDelay()

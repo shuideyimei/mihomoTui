@@ -8,6 +8,7 @@ import (
 
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
 
 	"github.com/gdamore/tcell/v2"
@@ -53,20 +54,20 @@ func (p *Page) setupUI() {
 	rightPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	p.detailView = tview.NewTextView()
 	p.detailView.SetBorder(true)
-	p.detailView.SetTitle(" 代理组详情 ")
+	p.detailView.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.detail_title")))
 	p.detailView.SetDynamicColors(true)
 	p.detailView.SetWordWrap(true)
 
 	p.actionBar = tview.NewFlex()
 	p.actionBar.SetBorder(true)
-	p.actionBar.SetTitle(" 操作 ")
+	p.actionBar.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.actions")))
 	p.setupActionBar()
 
 	p.status = tview.NewTextView()
 	p.status.SetBorder(true)
-	p.status.SetTitle(" 状态 ")
+	p.status.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.status")))
 	p.status.SetDynamicColors(true)
-	p.status.SetText("[green]就绪[white]")
+	p.status.SetText(i18n.T("pg.status_ready"))
 
 	rightPanel.AddItem(p.detailView, 0, 3, false)
 	rightPanel.AddItem(p.actionBar, 3, 0, false)
@@ -74,14 +75,14 @@ func (p *Page) setupUI() {
 
 	p.groupForm = tview.NewForm()
 	p.groupForm.SetBorder(true)
-	p.groupForm.SetTitle(" 添加代理组 ")
+	p.groupForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.add_title")))
 	p.groupForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput = tview.NewInputField()
 	p.nameInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	p.nameInput.SetLabel("名称 ")
+	p.nameInput.SetLabel(i18n.T("pg.name_label"))
 	p.nameInput.SetFieldWidth(30)
 	p.typeSelect = tview.NewDropDown()
-	p.typeSelect.SetLabel("类型 ")
+	p.typeSelect.SetLabel(i18n.T("pg.type_label"))
 	p.typeSelect.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.typeSelect.SetListStyles(
 		tcell.StyleDefault.Background(tcell.ColorDarkGray).Foreground(tcell.ColorWhite),
@@ -93,19 +94,19 @@ func (p *Page) setupUI() {
 	p.typeSelect.SetCurrentOption(0)
 	p.proxiesInput = tview.NewInputField()
 	p.proxiesInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	p.proxiesInput.SetLabel("代理节点(逗号分隔) ")
+	p.proxiesInput.SetLabel(i18n.T("pg.nodes_label"))
 	p.proxiesInput.SetFieldWidth(40)
 	p.useInput = tview.NewInputField()
 	p.useInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	p.useInput.SetLabel("提供者(逗号分隔) ")
+	p.useInput.SetLabel(i18n.T("pg.providers_label"))
 	p.useInput.SetFieldWidth(40)
 	p.urlInput = tview.NewInputField()
 	p.urlInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	p.urlInput.SetLabel("测试URL ")
+	p.urlInput.SetLabel(i18n.T("pg.test_url_label"))
 	p.urlInput.SetFieldWidth(40)
 	p.filterInput = tview.NewInputField()
 	p.filterInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	p.filterInput.SetLabel("过滤规则 ")
+	p.filterInput.SetLabel(i18n.T("pg.filter_label"))
 	p.filterInput.SetFieldWidth(30)
 
 	p.groupForm.AddFormItem(p.nameInput)
@@ -114,8 +115,8 @@ func (p *Page) setupUI() {
 	p.groupForm.AddFormItem(p.useInput)
 	p.groupForm.AddFormItem(p.urlInput)
 	p.groupForm.AddFormItem(p.filterInput)
-	p.groupForm.AddButton(" 保存 ", p.onSaveClicked)
-	p.groupForm.AddButton(" 取消 ", p.onCancelClicked)
+	p.groupForm.AddButton(i18n.T("pg.save_btn"), p.onSaveClicked)
+	p.groupForm.AddButton(i18n.T("pg.cancel_btn"), p.onCancelClicked)
 	p.groupForm.SetButtonsAlign(tview.AlignCenter)
 	p.groupForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	p.groupForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
@@ -130,13 +131,13 @@ func (p *Page) setupUI() {
 	p.SetDirection(tview.FlexRow)
 	p.AddItem(mainFlex, 0, 1, true)
 	p.SetBorder(true)
-	p.SetTitle(" 代理组管理 ")
+	p.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.title")))
 }
 
 func (p *Page) setupGroupList() {
 	p.groupList = tview.NewList()
 	p.groupList.SetBorder(true)
-	p.groupList.SetTitle(" 代理组 ")
+	p.groupList.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.group_list_title")))
 	p.groupList.SetMainTextColor(tcell.ColorWhite)
 	p.groupList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
 	p.groupList.SetSelectedTextColor(tcell.ColorBlack)
@@ -183,19 +184,19 @@ func (p *Page) setupActionBar() {
 	btnStyle := tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite)
 	btnFocus := tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite)
 
-	refreshBtn := tview.NewButton("[R] 刷新")
+	refreshBtn := tview.NewButton(i18n.T("pg.refresh_action"))
 	refreshBtn.SetStyle(btnStyle)
 	refreshBtn.SetActivatedStyle(btnFocus)
 	refreshBtn.SetSelectedFunc(func() { go p.refresh() })
-	addBtn := tview.NewButton("[A] 添加")
+	addBtn := tview.NewButton(i18n.T("pg.add_action"))
 	addBtn.SetStyle(btnStyle)
 	addBtn.SetActivatedStyle(btnFocus)
 	addBtn.SetSelectedFunc(p.showAddForm)
-	editBtn := tview.NewButton("[E] 编辑")
+	editBtn := tview.NewButton(i18n.T("pg.edit_action"))
 	editBtn.SetStyle(btnStyle)
 	editBtn.SetActivatedStyle(btnFocus)
 	editBtn.SetSelectedFunc(p.showEditForm)
-	deleteBtn := tview.NewButton("[D] 删除")
+	deleteBtn := tview.NewButton(i18n.T("pg.del_action"))
 	deleteBtn.SetStyle(btnStyle)
 	deleteBtn.SetActivatedStyle(btnFocus)
 	deleteBtn.SetSelectedFunc(func() { go p.deleteSelected() })
@@ -223,7 +224,7 @@ func (p *Page) showAddForm() {
 	p.editingGroup = ""
 	p.mu.Unlock()
 
-	p.groupForm.SetTitle(" 添加代理组 ")
+	p.groupForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.add_title")))
 	p.nameInput.SetText("")
 	p.typeSelect.SetCurrentOption(0)
 	p.proxiesInput.SetText("")
@@ -240,12 +241,12 @@ func (p *Page) showEditForm() {
 	p.mu.Unlock()
 
 	if idx < 0 || idx >= len(groups) {
-		p.showError("请先选择一个代理组")
+		p.showError(i18n.T("pg.select_first"))
 		return
 	}
 	g := groups[idx]
 	if g.Name == "Proxy" || g.Name == "Auto" || g.Name == "GLOBAL" {
-		p.showError(fmt.Sprintf("内置组 %q 不可编辑", g.Name))
+		p.showError(fmt.Sprintf(i18n.T("pg.builtin_not_editable"), g.Name))
 		return
 	}
 
@@ -258,7 +259,7 @@ func (p *Page) showEditForm() {
 	p.editingGroup = g.Name
 	p.mu.Unlock()
 
-	p.groupForm.SetTitle(fmt.Sprintf(" 编辑代理组: %s ", g.Name))
+	p.groupForm.SetTitle(fmt.Sprintf(i18n.T("pg.edit_title"), g.Name))
 	p.nameInput.SetText(g.Name)
 	typeIndex := 0
 	for i, vt := range config.ValidGroupTypes {
@@ -292,7 +293,7 @@ func (p *Page) hideForm() {
 func (p *Page) onSaveClicked() {
 	name := strings.TrimSpace(p.nameInput.GetText())
 	if name == "" {
-		p.showError("名称不能为空")
+		p.showError(i18n.T("pg.name_empty"))
 		return
 	}
 	_, typeStr := p.typeSelect.GetCurrentOption()
@@ -326,7 +327,7 @@ func (p *Page) onSaveClicked() {
 	editing := p.editingGroup
 	p.mu.Unlock()
 
-	p.showStatus(fmt.Sprintf("[yellow]正在保存代理组 %s...[white]", name))
+	p.showStatus(fmt.Sprintf(i18n.T("pg.saving"), name))
 	go p.saveGroup(name, typeStr, filter, testURL, use, proxies, editing)
 }
 
@@ -353,7 +354,7 @@ func (p *Page) saveGroup(name, groupType, filter, testURL string, use, proxies [
 	}
 
 	if err != nil {
-		p.showError(fmt.Sprintf("保存失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("pg.save_fail"), err))
 		return
 	}
 
@@ -363,7 +364,7 @@ func (p *Page) saveGroup(name, groupType, filter, testURL string, use, proxies [
 
 	groups, err := config.GetAllProxyGroupsFromConfig()
 	if err != nil {
-		p.showError(fmt.Sprintf("读取配置失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("pg.config_read_fail"), err))
 		return
 	}
 
@@ -378,7 +379,7 @@ func (p *Page) saveGroup(name, groupType, filter, testURL string, use, proxies [
 			p.RemoveItem(p.groupForm)
 		}
 		p.updateGroupList()
-		p.status.SetText(fmt.Sprintf("[green]代理组 %s 已保存[white]", name))
+		p.status.SetText(fmt.Sprintf(i18n.T("pg.save_ok"), name))
 	})
 }
 
@@ -386,20 +387,20 @@ func (p *Page) deleteSelected() {
 	p.mu.Lock()
 	if p.selectedIndex < 0 || p.selectedIndex >= len(p.groups) {
 		p.mu.Unlock()
-		p.showError("请先选择一个代理组")
+		p.showError(i18n.T("pg.select_first"))
 		return
 	}
 	g := p.groups[p.selectedIndex]
 	p.mu.Unlock()
 
 	if g.Name == "Proxy" || g.Name == "Auto" || g.Name == "GLOBAL" {
-		p.showError(fmt.Sprintf("内置组 %q 不能删除", g.Name))
+		p.showError(fmt.Sprintf(i18n.T("pg.builtin_not_del"), g.Name))
 		return
 	}
 
 	configPath, err := config.DeleteGroupFromConfig(g.Name)
 	if err != nil {
-		p.showError(fmt.Sprintf("删除失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("pg.delete_fail"), err))
 		return
 	}
 
@@ -409,7 +410,7 @@ func (p *Page) deleteSelected() {
 
 	groups, err := config.GetAllProxyGroupsFromConfig()
 	if err != nil {
-		p.showError(fmt.Sprintf("读取配置失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("pg.config_read_fail"), err))
 		return
 	}
 
@@ -418,14 +419,14 @@ func (p *Page) deleteSelected() {
 		p.groups = groups
 		p.mu.Unlock()
 		p.updateGroupList()
-		p.status.SetText(fmt.Sprintf("[green]已删除代理组 %s[white]", g.Name))
+		p.status.SetText(fmt.Sprintf(i18n.T("pg.del_ok"), g.Name))
 	})
 }
 
 func (p *Page) refresh() {
 	groups, err := config.GetAllProxyGroupsFromConfig()
 	if err != nil {
-		p.showError(fmt.Sprintf("读取配置失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("pg.config_read_fail"), err))
 		return
 	}
 	go ui.Updater.UpdateUi(func() {
@@ -443,49 +444,49 @@ func (p *Page) updateGroupList() {
 	p.mu.Unlock()
 
 	if len(groups) == 0 {
-		p.groupList.AddItem("(暂无代理组)", "按 A 键添加新代理组", 0, nil)
+		p.groupList.AddItem(i18n.T("pg.empty_list"), i18n.T("pg.add_hint"), 0, nil)
 		return
 	}
 
 	for _, g := range groups {
 		sec := fmt.Sprintf("%s", g.Type)
 		if len(g.Proxies) > 0 {
-			sec += fmt.Sprintf(" | 节点: %d", len(g.Proxies))
+			sec += fmt.Sprintf(i18n.T("pg.node_count"), len(g.Proxies))
 		}
 		if len(g.Use) > 0 {
-			sec += fmt.Sprintf(" | 提供者: %d", len(g.Use))
+			sec += fmt.Sprintf(i18n.T("pg.provider_count"), len(g.Use))
 		}
-		p.groupList.AddItem(g.Name, sec, 0, nil)
+		p.groupList.AddItem(ui.StripFlagEmoji(g.Name), sec, 0, nil)
 	}
 }
 
 // showDetail is always called from the UI goroutine (SetChangedFunc, keyboard handler).
 func (p *Page) showDetail(g config.ProxyGroupEntry) {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("[yellow]名称:[white] %s\n", g.Name))
-	b.WriteString(fmt.Sprintf("[yellow]类型:[white] %s\n", g.Type))
+	b.WriteString(fmt.Sprintf(i18n.T("pg.detail_name"), ui.StripFlagEmoji(g.Name)))
+	b.WriteString(fmt.Sprintf(i18n.T("pg.detail_type"), g.Type))
 	if len(g.Proxies) > 0 {
-		b.WriteString("[yellow]代理节点:[white]\n")
+		b.WriteString(i18n.T("pg.detail_nodes"))
 		for _, pr := range g.Proxies {
-			b.WriteString(fmt.Sprintf("  - %s\n", pr))
+			b.WriteString(fmt.Sprintf("  - %s\n", ui.StripFlagEmoji(pr)))
 		}
 	}
 	if len(g.Use) > 0 {
-		b.WriteString("[yellow]代理提供者:[white]\n")
+		b.WriteString(i18n.T("pg.detail_providers"))
 		for _, u := range g.Use {
 			b.WriteString(fmt.Sprintf("  - %s\n", u))
 		}
 	}
 	if g.URL != "" {
-		b.WriteString(fmt.Sprintf("[yellow]测试URL:[white] %s\n", g.URL))
+		b.WriteString(fmt.Sprintf(i18n.T("pg.detail_test_url"), g.URL))
 	}
 	if g.Interval > 0 {
-		b.WriteString(fmt.Sprintf("[yellow]测试间隔:[white] %ds\n", g.Interval))
+		b.WriteString(fmt.Sprintf(i18n.T("pg.detail_interval"), g.Interval))
 	}
 	if g.Filter != "" {
-		b.WriteString(fmt.Sprintf("[yellow]过滤规则:[white] %s\n", g.Filter))
+		b.WriteString(fmt.Sprintf(i18n.T("pg.detail_filter"), g.Filter))
 	}
-	b.WriteString("\n[gray]配置文件中的代理组定义[white]")
+	b.WriteString(i18n.T("pg.detail_in_config"))
 	p.detailView.SetText(b.String())
 }
 

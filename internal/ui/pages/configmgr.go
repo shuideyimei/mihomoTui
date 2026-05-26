@@ -11,6 +11,7 @@ import (
 
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
 
 	"github.com/gdamore/tcell/v2"
@@ -48,11 +49,11 @@ func (cm *ConfigManager) setupUI() {
 	mainFlex := tview.NewFlex()
 	mainFlex.SetDirection(tview.FlexRow)
 	mainFlex.SetBorder(true)
-	mainFlex.SetTitle(" 配置管理 ")
+	mainFlex.SetTitle(fmt.Sprintf(" %s ", i18n.T("cmgr.title")))
 
 	cm.configList = tview.NewList()
 	cm.configList.SetBorder(true)
-	cm.configList.SetTitle(" 配置文件列表 ")
+	cm.configList.SetTitle(fmt.Sprintf(" %s ", i18n.T("cmgr.file_list")))
 	cm.configList.SetMainTextColor(tcell.ColorWhite)
 	cm.configList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
 	cm.configList.SetSelectedTextColor(tcell.ColorBlack)
@@ -73,15 +74,15 @@ func (cm *ConfigManager) setupUI() {
 
 	cm.statusText = tview.NewTextView()
 	cm.statusText.SetBorder(true)
-	cm.statusText.SetTitle(" 状态 ")
+	cm.statusText.SetTitle(fmt.Sprintf(" %s ", i18n.T("cmgr.status")))
 	cm.statusText.SetDynamicColors(true)
-	cm.statusText.SetText("[green]就绪[-]")
+	cm.statusText.SetText(i18n.T("cmgr.status_ready"))
 
 	// Build edit dialog page (reusable, shown/hidden as a page overlay)
-	editSaveBtn := tview.NewButton("[white::b] 保存(Ctrl+S) ")
+	editSaveBtn := tview.NewButton(i18n.T("cmgr.save_btn"))
 	editSaveBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	editSaveBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	editCancelBtn := tview.NewButton("[white::b] 取消(Esc) ")
+	editCancelBtn := tview.NewButton(i18n.T("cmgr.cancel_btn"))
 	editCancelBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	editCancelBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 
@@ -95,7 +96,7 @@ func (cm *ConfigManager) setupUI() {
 	editDialog := tview.NewFlex()
 	editDialog.SetDirection(tview.FlexRow)
 	editDialog.SetBorder(true)
-	editDialog.SetTitle(" 编辑配置 ")
+	editDialog.SetTitle(fmt.Sprintf(" %s ", i18n.T("cmgr.edit_title")))
 	editDialog.AddItem(cm.editArea, 0, 1, true)
 	editDialog.AddItem(editBtnFlex, 1, 0, false)
 
@@ -108,7 +109,7 @@ func (cm *ConfigManager) setupUI() {
 	editFlex.AddItem(nil, 0, 1, false)
 
 	editSaveBtn.SetSelectedFunc(func() {
-		cm.statusText.SetText("[yellow]正在保存配置...[-]")
+		cm.statusText.SetText(i18n.T("cmgr.saving"))
 		text := cm.editArea.GetText()
 		go cm.saveEdit(text)
 	})
@@ -117,12 +118,12 @@ func (cm *ConfigManager) setupUI() {
 	})
 	cm.editFlex = editFlex
 
-	editBtn := tview.NewButton("[white::b] 预览 ")
+	editBtn := tview.NewButton(i18n.T("cmgr.preview_btn"))
 	editBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	editBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	editBtn.SetSelectedFunc(func() { cm.showEditDialog() })
 
-	deleteBtn := tview.NewButton("[white::b] 删除 ")
+	deleteBtn := tview.NewButton(i18n.T("cmgr.delete_btn"))
 	deleteBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	deleteBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	deleteBtn.SetLabelColorActivated(tcell.ColorWhite)
@@ -137,7 +138,7 @@ func (cm *ConfigManager) setupUI() {
 
 	helpText := tview.NewTextView()
 	helpText.SetDynamicColors(true)
-	helpText.SetText("[gray]E 编辑/预览 | D 删除 | R 刷新 | Tab 导航[-]")
+	helpText.SetText(i18n.T("cmgr.nav_hint"))
 	helpText.SetTextAlign(tview.AlignCenter)
 
 	mainFlex.AddItem(cm.configList, 0, 1, true)
@@ -204,19 +205,19 @@ func (cm *ConfigManager) refresh() {
 	current := cm.currentConfig
 	cm.mu.Unlock()
 
-	ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		cm.configList.Clear()
 		for _, f := range files {
 			label := config.FriendlyPath(f)
 			if f == current {
-				label = "[当前] " + label
+				label = i18n.T("cmgr.current_tag") + label
 			}
 			cm.configList.AddItem(label, "", 0, nil)
 		}
 		if idx >= 0 {
 			cm.configList.SetCurrentItem(idx)
 		}
-		cm.statusText.SetText("[green]已刷新列表[-]")
+		cm.statusText.SetText(i18n.T("cmgr.refreshed"))
 	})
 }
 
@@ -234,7 +235,7 @@ func (cm *ConfigManager) rebuildList() {
 		for _, f := range files {
 			label := config.FriendlyPath(f)
 			if f == current {
-				label = "[当前] " + label
+				label = i18n.T("cmgr.current_tag") + label
 			}
 			cm.configList.AddItem(label, "", 0, nil)
 		}
@@ -262,7 +263,7 @@ func (cm *ConfigManager) showEditDialog() {
 	cm.mu.Unlock()
 
 	if idx < 0 || idx >= len(files) {
-		cm.statusText.SetText("[red]请先选择一个配置文件[-]")
+		cm.statusText.SetText(i18n.T("cmgr.select_first"))
 		return
 	}
 
@@ -271,7 +272,7 @@ func (cm *ConfigManager) showEditDialog() {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			ui.Updater.PostUi(func() {
-				cm.statusText.SetText(fmt.Sprintf("[red]读取失败: %s[-]", tview.Escape(err.Error())))
+				cm.statusText.SetText(fmt.Sprintf(i18n.T("cmgr.read_fail"), tview.Escape(err.Error())))
 			})
 			return
 		}
@@ -279,10 +280,10 @@ func (cm *ConfigManager) showEditDialog() {
 
 		ui.Updater.PostUi(func() {
 			cm.editMode = true
-			cm.editArea.SetTitle(fmt.Sprintf(" 编辑: %s ", config.FriendlyPath(path)))
+			cm.editArea.SetTitle(fmt.Sprintf(i18n.T("cmgr.edit_file"), config.FriendlyPath(path)))
 			cm.editArea.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 				if ev.Key() == tcell.KeyCtrlS || (ev.Modifiers()&tcell.ModCtrl != 0 && (ev.Rune() == 's' || ev.Rune() == 'S')) {
-					cm.statusText.SetText("[yellow]正在保存配置...[-]")
+					cm.statusText.SetText(i18n.T("cmgr.saving"))
 					text := cm.editArea.GetText()
 					go cm.saveEdit(text)
 					return nil
@@ -308,7 +309,7 @@ func (cm *ConfigManager) closeEditDialog() {
 	cm.editArea.SetText("", true)
 	cm.pages.RemovePage("edit")
 	cm.pages.SwitchToPage("main")
-	cm.statusText.SetText("[green]已退出编辑模式[-]")
+	cm.statusText.SetText(i18n.T("cmgr.edit_exited"))
 }
 
 func (cm *ConfigManager) saveEdit(text string) {
@@ -318,7 +319,7 @@ func (cm *ConfigManager) saveEdit(text string) {
 
 	if text == "" {
 		ui.Updater.PostUi(func() {
-			cm.statusText.SetText("[red]配置内容不能为空[-]")
+			cm.statusText.SetText(i18n.T("cmgr.content_empty"))
 		})
 		return
 	}
@@ -326,7 +327,7 @@ func (cm *ConfigManager) saveEdit(text string) {
 	var temp interface{}
 	if err := yaml.Unmarshal([]byte(text), &temp); err != nil {
 		ui.Updater.PostUi(func() {
-			cm.statusText.SetText(fmt.Sprintf("[red]YAML 格式错误: %s[-]", tview.Escape(err.Error())))
+			cm.statusText.SetText(fmt.Sprintf(i18n.T("cmgr.yaml_invalid"), tview.Escape(err.Error())))
 		})
 		return
 	}
@@ -338,7 +339,7 @@ func (cm *ConfigManager) saveEdit(text string) {
 
 	if idx < 0 || idx >= len(files) {
 		ui.Updater.PostUi(func() {
-			cm.statusText.SetText("[red]未选择配置文件[-]")
+			cm.statusText.SetText(i18n.T("cmgr.no_selection"))
 		})
 		return
 	}
@@ -347,7 +348,7 @@ func (cm *ConfigManager) saveEdit(text string) {
 
 	if api.Client == nil {
 		ui.Updater.PostUi(func() {
-			cm.statusText.SetText("[red]API 客户端未初始化[-]")
+			cm.statusText.SetText(i18n.T("cmgr.no_api_client"))
 			cm.closeEditDialog()
 		})
 		return
@@ -376,9 +377,9 @@ func (cm *ConfigManager) saveEdit(text string) {
 	ui.Updater.PostUi(func() {
 		log.Printf("[configmgr] PostUi callback running")
 		if saveErr != nil {
-			cm.statusText.SetText(fmt.Sprintf("[red]保存失败: %s[-]", tview.Escape(saveErr.Error())))
+			cm.statusText.SetText(fmt.Sprintf(i18n.T("cmgr.save_fail"), tview.Escape(saveErr.Error())))
 		} else {
-			cm.statusText.SetText("[green]配置已保存并重载成功[-]")
+			cm.statusText.SetText(i18n.T("cmgr.save_ok"))
 		}
 		cm.closeEditDialog()
 		log.Printf("[configmgr] PostUi callback done")
@@ -439,7 +440,7 @@ func (cm *ConfigManager) showDeleteConfirm() {
 	cm.mu.Unlock()
 
 	if idx < 0 || idx >= len(files) {
-		cm.statusText.SetText("[red]请先选择一个配置文件[-]")
+		cm.statusText.SetText(i18n.T("cmgr.select_first"))
 		return
 	}
 
@@ -451,16 +452,16 @@ func (cm *ConfigManager) showDeleteConfirm() {
 	textView := tview.NewTextView()
 	textView.SetDynamicColors(true)
 	textView.SetTextAlign(tview.AlignCenter)
-	warning := fmt.Sprintf("确定要删除配置文件吗?\n\n[red]%s[-]", tview.Escape(label))
+	warning := fmt.Sprintf(i18n.T("cmgr.delete_confirm"), tview.Escape(label))
 	if isCurrent {
-		warning += "\n\n[yellow]警告: 这是当前使用的配置文件![-]"
+		warning += i18n.T("cmgr.delete_warn")
 	}
 	textView.SetText(warning)
 
-	deleteBtn := tview.NewButton("删除")
+	deleteBtn := tview.NewButton(i18n.T("cmgr.delete_confirm_btn"))
 	deleteBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	deleteBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	cancelBtn := tview.NewButton("取消")
+	cancelBtn := tview.NewButton(i18n.T("cmgr.delete_cancel_btn"))
 	cancelBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	cancelBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 
@@ -471,7 +472,7 @@ func (cm *ConfigManager) showDeleteConfirm() {
 	dialog := tview.NewFlex()
 	dialog.SetDirection(tview.FlexRow)
 	dialog.SetBorder(true)
-	dialog.SetTitle(" 删除配置 ")
+	dialog.SetTitle(fmt.Sprintf(" %s ", i18n.T("cmgr.delete_title")))
 	dialog.AddItem(textView, 3, 0, true)
 	dialog.AddItem(btnFlex, 1, 0, false)
 
@@ -485,7 +486,7 @@ func (cm *ConfigManager) showDeleteConfirm() {
 
 	deleteBtn.SetSelectedFunc(func() {
 		if err := os.Remove(path); err != nil {
-			cm.statusText.SetText(fmt.Sprintf("[red]删除失败: %s[-]", tview.Escape(err.Error())))
+			cm.statusText.SetText(fmt.Sprintf(i18n.T("cmgr.delete_fail"), tview.Escape(err.Error())))
 		} else {
 			cm.mu.Lock()
 			if idx >= 0 && idx < len(cm.files) {
@@ -494,7 +495,7 @@ func (cm *ConfigManager) showDeleteConfirm() {
 			cm.selectedIdx = -1
 			cm.mu.Unlock()
 			cm.rebuildList()
-			cm.statusText.SetText(fmt.Sprintf("[green]已删除: %s[-]", tview.Escape(label)))
+			cm.statusText.SetText(fmt.Sprintf(i18n.T("cmgr.deleted"), tview.Escape(label)))
 			log.Printf("[configmgr] deleted config: %s", path)
 		}
 		cm.pages.SwitchToPage("main")

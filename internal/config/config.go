@@ -11,6 +11,9 @@ import (
 type AppConfig struct {
 	// API settings
 	API APIConfig `json:"api"`
+
+	// Language setting ("zh" or "en")
+	Language string `json:"language"`
 }
 
 // GetValue returns configuration value by label
@@ -50,6 +53,7 @@ func DefaultConfig() *AppConfig {
 			BaseURL: "http://127.0.0.1:9090",
 			Secret:  "",
 		},
+		Language: "zh",
 	}
 }
 
@@ -133,6 +137,20 @@ func (m *Manager) Set(config *AppConfig) error {
 // SetInMemory updates the configuration in memory without persisting to disk.
 func (m *Manager) SetInMemory(config *AppConfig) {
 	m.config = config
+}
+
+// GetLanguage returns the current language setting
+func (m *Manager) GetLanguage() string {
+	if m.config.Language == "" {
+		return "zh"
+	}
+	return m.config.Language
+}
+
+// SetLanguage sets the language and persists to disk
+func (m *Manager) SetLanguage(lang string) error {
+	m.config.Language = lang
+	return m.Save()
 }
 
 // GetAPI returns API configuration

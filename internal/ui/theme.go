@@ -59,6 +59,21 @@ func InitTheme() {
 	tview.Styles.ContrastSecondaryTextColor = tcell.ColorGray
 }
 
+// StripFlagEmoji removes Regional Indicator characters (U+1F1E6-U+1F1FF)
+// from display strings. These characters form flag emojis (e.g. 🇭🇰) but
+// their terminal rendering width often mismatches the TUI library's width
+// calculation, causing screen ghosting artifacts when content changes.
+func StripFlagEmoji(s string) string {
+	result := make([]rune, 0, len(s))
+	for _, r := range s {
+		if r >= 0x1F1E6 && r <= 0x1F1FF {
+			continue
+		}
+		result = append(result, r)
+	}
+	return string(result)
+}
+
 // Theme tag constants (tview tag strings for inline text coloring)
 const (
 	ThemeTagError        = "[red]"

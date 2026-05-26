@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"mihomoTui/internal/api"
+	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
 	"mihomoTui/internal/utils"
@@ -147,8 +148,8 @@ func (s *StatusBar) updateContent() {
 		downSpeed = "- B/s"
 	}
 
-	content = fmt.Sprintf("%s%s[white] | ↑ [green]%s[white]  ↓ [green]%s[white]  [gray]?/F12 帮助[-]",
-		modeTag, mode, upSpeed, downSpeed)
+	content = fmt.Sprintf("%s%s[white] | ↑ [green]%s[white]  ↓ [green]%s[white]  [gray]%s[-]",
+		modeTag, mode, upSpeed, downSpeed, i18n.T("status.help"))
 
 	s.SetText(content)
 }

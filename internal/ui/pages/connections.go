@@ -4,13 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"mihomoTui/internal/api"
-	"mihomoTui/internal/models"
-	"mihomoTui/internal/ui"
-	"mihomoTui/internal/utils"
 	"strings"
 	"sync"
 	"time"
+
+	"mihomoTui/internal/api"
+	"mihomoTui/internal/i18n"
+	"mihomoTui/internal/models"
+	"mihomoTui/internal/ui"
+	"mihomoTui/internal/utils"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -70,8 +72,8 @@ func (c *ConnectionsPage) Activate() {
 	// Start auto-refresh
 	c.startAutoRefresh()
 
-	go ui.Updater.UpdateUi(func() {
-		c.statusText.SetText("连接页面已激活")
+	ui.Updater.PostUi(func() {
+		c.statusText.SetText(i18n.T("conn.title"))
 		c.updateConnectionsTable()
 	})
 }
@@ -107,7 +109,7 @@ func (c *ConnectionsPage) setupLayout() {
 	c.mainFlex.AddItem(rightPanel, 0, 2, false)
 
 	c.mainFlex.SetBorder(true)
-	c.mainFlex.SetTitle(" 连接管理 ")
+	c.mainFlex.SetTitle(fmt.Sprintf(" %s ", i18n.T("conn.title")))
 
 	c.pages.AddPage("main", c.mainFlex, true, true)
 	c.AddItem(c.pages, 0, 1, true)
@@ -117,11 +119,15 @@ func (c *ConnectionsPage) setupLayout() {
 func (c *ConnectionsPage) createConnectionsTable() {
 	c.connectionsTable = tview.NewTable().SetFixed(1, 0)
 	c.connectionsTable.SetBorder(true)
-	c.connectionsTable.SetTitle(" 活跃连接 ")
+	c.connectionsTable.SetTitle(fmt.Sprintf(" %s ", i18n.T("conn.active_conn")))
 	c.connectionsTable.SetSelectable(true, false)
 
 	// Set table headers
-	headers := []string{"ID", "网络", "源地址", "目标地址", "代理链", "规则", "上传", "下载", "持续时间"}
+	headers := []string{
+		i18n.T("conn.col_id"), i18n.T("conn.col_network"), i18n.T("conn.col_source"),
+		i18n.T("conn.col_dest"), i18n.T("conn.col_chain"), i18n.T("conn.col_rule"),
+		i18n.T("conn.col_upload"), i18n.T("conn.col_download"), i18n.T("conn.col_duration"),
+	}
 	for i, header := range headers {
 		cell := tview.NewTableCell(header).
 			SetTextColor(tcell.ColorGray).
@@ -135,19 +141,19 @@ func (c *ConnectionsPage) createConnectionsTable() {
 func (c *ConnectionsPage) createStatusText() {
 	c.statusText = tview.NewTextView()
 	c.statusText.SetBorder(true)
-	c.statusText.SetTitle(" 状态 ")
+	c.statusText.SetTitle(fmt.Sprintf(" %s ", i18n.T("conn.status")))
 	c.statusText.SetDynamicColors(true)
-	c.statusText.SetText("初始化中...")
+	c.statusText.SetText(i18n.T("conn.initializing"))
 }
 
 // createInfoPanel creates the connection info panel
 func (c *ConnectionsPage) createInfoPanel() {
 	c.infoPanel = tview.NewTextView()
 	c.infoPanel.SetBorder(true)
-	c.infoPanel.SetTitle(" 连接详情 ")
+	c.infoPanel.SetTitle(fmt.Sprintf(" %s ", i18n.T("conn.detail_title")))
 	c.infoPanel.SetDynamicColors(true)
 	c.infoPanel.SetWordWrap(true)
-	c.infoPanel.SetText("选择一个连接查看详细信息")
+	c.infoPanel.SetText(i18n.T("conn.select_hint"))
 }
 
 // setupEventHandlers sets up event handlers
@@ -211,7 +217,9 @@ func (c *ConnectionsPage) loadConnectionsData() {
 
 	connections, err := api.Client.GetConnections()
 	if err != nil {
-		c.showError(fmt.Sprintf("获取连接数据失败: %v", err))
+		ui.Updater.PostUi(func() {
+			c.statusText.SetText(fmt.Sprintf(i18n.T("dash.conn_fetch_fail"), err))
+		})
 		return
 	}
 
@@ -260,6 +268,7 @@ func (c *ConnectionsPage) updateConnectionsTable() {
 		chains := "DIRECT"
 		if len(conn.Chains) > 0 {
 			chains = strings.Join(conn.Chains, " → ")
+			chains = ui.StripFlagEmoji(chains)
 		}
 
 		// Format rule
@@ -320,34 +329,37 @@ func (c *ConnectionsPage) updateConnectionsTable() {
 
 // updateInfoPanel updates the connection info panel
 func (c *ConnectionsPage) updateInfoPanel(conn models.Connection) {
-	info := fmt.Sprintf(
-		`[yellow]ID:[white] %s
-[yellow]网络:[white] %s (%s)
-[yellow]源:[white] %s:%s
-[yellow]目标:[white] %s:%s (%s)
-[yellow]代理链:[white] %s
-[yellow]规则:[white] %s (%s)
-[yellow]上传/下载:[white] %s / %s (总: %s)
-[yellow]开始:[white] %s
-[yellow]持续:[white] %s
-[yellow]DNS:[white] %s
-[yellow]进程:[white] %s
-[yellow]特殊代理:[white] %s`,
-		conn.ID,
-		conn.Metadata.Network, conn.Metadata.Type,
-		conn.Metadata.SourceIP, conn.Metadata.SourcePort,
-		conn.Metadata.DestinationIP, conn.Metadata.DestinationPort, c.safeString(conn.Metadata.Host, "未知"),
-		c.formatChains(conn.Chains),
-		c.safeString(conn.Rule, "DIRECT"), c.safeString(conn.RulePayload, "无"),
-		utils.FormatBytes(conn.Upload), utils.FormatBytes(conn.Download), utils.FormatBytes(conn.Upload+conn.Download),
-		conn.Start.Format("2006-01-02 15:04:05"),
-		time.Since(conn.Start).Truncate(time.Second).String(),
-		c.safeString(conn.Metadata.DNSMode, "未知"),
-		c.safeString(conn.Metadata.ProcessPath, "未知"),
-		c.safeString(conn.Metadata.SpecialProxy, "无"),
-	)
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf(i18n.T("conn.info_id"), conn.ID))
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf(i18n.T("conn.info_network"), conn.Metadata.Network, conn.Metadata.Type))
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf(i18n.T("conn.info_source"), conn.Metadata.SourceIP, conn.Metadata.SourcePort))
+	b.WriteString("\n")
+	destAddr := fmt.Sprintf("%s:%s", conn.Metadata.DestinationIP, conn.Metadata.DestinationPort)
+	if conn.Metadata.Host != "" {
+		destAddr = fmt.Sprintf("%s:%s", conn.Metadata.Host, conn.Metadata.DestinationPort)
+	}
+	b.WriteString(fmt.Sprintf(i18n.T("conn.info_dest"), destAddr))
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf(i18n.T("conn.info_chain"), c.formatChains(conn.Chains)))
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf(i18n.T("conn.info_rule"), c.safeString(conn.Rule, "DIRECT"), c.safeString(conn.RulePayload, i18n.T("conn.none"))))
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf(i18n.T("conn.info_updown"), utils.FormatBytes(conn.Upload), utils.FormatBytes(conn.Download), utils.FormatBytes(conn.Upload+conn.Download)))
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf(i18n.T("conn.info_start"), conn.Start.Format("2006-01-02 15:04:05")))
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf(i18n.T("conn.info_duration"), time.Since(conn.Start).Truncate(time.Second).String()))
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf(i18n.T("conn.info_dns"), c.safeString(conn.Metadata.DNSMode, i18n.T("conn.unknown"))))
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf(i18n.T("conn.info_process"), c.safeString(conn.Metadata.ProcessPath, i18n.T("conn.unknown"))))
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf(i18n.T("conn.info_special"), ui.StripFlagEmoji(c.safeString(conn.Metadata.SpecialProxy, i18n.T("conn.none")))))
 
-	go ui.Updater.UpdateUi(func() {
+	info := b.String()
+	ui.Updater.PostUi(func() {
 		c.infoPanel.SetText(info)
 	})
 }
@@ -381,37 +393,37 @@ func (c *ConnectionsPage) showConnectionDetails() {
 
 func (c *ConnectionsPage) createDetailView(conn *models.Connection) *tview.Flex {
 	var b strings.Builder
-	fmt.Fprintf(&b, "[yellow]ID:[white] %s\n\n", conn.ID)
-	fmt.Fprintf(&b, "[yellow]源地址:[white] %s:%s\n", conn.Metadata.SourceIP, conn.Metadata.SourcePort)
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_id"), conn.ID))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_source"), conn.Metadata.SourceIP, conn.Metadata.SourcePort))
 	destAddr := fmt.Sprintf("%s:%s", conn.Metadata.DestinationIP, conn.Metadata.DestinationPort)
 	if conn.Metadata.Host != "" {
 		destAddr = fmt.Sprintf("%s:%s", conn.Metadata.Host, conn.Metadata.DestinationPort)
 	}
-	fmt.Fprintf(&b, "[yellow]目标地址:[white] %s\n", destAddr)
-	fmt.Fprintf(&b, "[yellow]主机:[white] %s\n", c.safeString(conn.Metadata.Host, "无"))
-	fmt.Fprintf(&b, "[yellow]上传:[white] %s\n", utils.FormatBytes(conn.Upload))
-	fmt.Fprintf(&b, "[yellow]下载:[white] %s\n", utils.FormatBytes(conn.Download))
-	fmt.Fprintf(&b, "[yellow]总量:[white] %s\n", utils.FormatBytes(conn.Upload+conn.Download))
-	fmt.Fprintf(&b, "[yellow]开始时间:[white] %s\n", conn.Start.Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(&b, "[yellow]持续时间:[white] %s\n", time.Since(conn.Start).Truncate(time.Second).String())
-	fmt.Fprintf(&b, "[yellow]代理链:[white] %s\n", c.formatChains(conn.Chains))
-	fmt.Fprintf(&b, "[yellow]规则:[white] %s", conn.Rule)
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_dest"), destAddr))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_host"), c.safeString(conn.Metadata.Host, i18n.T("conn.none"))))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_upload"), utils.FormatBytes(conn.Upload)))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_download"), utils.FormatBytes(conn.Download)))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_total"), utils.FormatBytes(conn.Upload+conn.Download)))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_start"), conn.Start.Format("2006-01-02 15:04:05")))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_duration"), time.Since(conn.Start).Truncate(time.Second).String()))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_chain"), c.formatChains(conn.Chains)))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_rule"), conn.Rule))
 	if conn.RulePayload != "" {
-		fmt.Fprintf(&b, " (%s)", conn.RulePayload)
+		b.WriteString(fmt.Sprintf(" (%s)", conn.RulePayload))
 	}
-	fmt.Fprintf(&b, "\n[yellow]进程路径:[white] %s\n", c.safeString(conn.Metadata.ProcessPath, "未知"))
-	fmt.Fprintf(&b, "[yellow]网络类型:[white] %s\n", conn.Metadata.Network)
-	fmt.Fprintf(&b, "[yellow]连接类型:[white] %s\n", conn.Metadata.Type)
-	fmt.Fprintf(&b, "[yellow]DNS模式:[white] %s\n", c.safeString(conn.Metadata.DNSMode, "未知"))
-	fmt.Fprintf(&b, "[yellow]特殊代理:[white] %s", c.safeString(conn.Metadata.SpecialProxy, "无"))
-	fmt.Fprintf(&b, "\n\n[gray]按 [yellow]Esc[gray] 或点击 [yellow]关闭[gray] 返回")
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_process"), c.safeString(conn.Metadata.ProcessPath, i18n.T("conn.unknown"))))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_network_type"), conn.Metadata.Network))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_conn_type"), conn.Metadata.Type))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_dns_mode"), c.safeString(conn.Metadata.DNSMode, i18n.T("conn.unknown"))))
+	b.WriteString(fmt.Sprintf(i18n.T("conn.detail_special_proxy"), ui.StripFlagEmoji(c.safeString(conn.Metadata.SpecialProxy, i18n.T("conn.none")))))
+	b.WriteString(i18n.T("conn.detail_back"))
 
 	textView := tview.NewTextView().
 		SetDynamicColors(true).
 		SetWordWrap(true).
 		SetText(b.String())
 
-	closeBtn := tview.NewButton(" 关闭 (Esc) ")
+	closeBtn := tview.NewButton(i18n.T("conn.close_btn"))
 	closeBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	closeBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	closeBtn.SetSelectedFunc(func() {
@@ -422,7 +434,7 @@ func (c *ConnectionsPage) createDetailView(conn *models.Connection) *tview.Flex 
 
 	popupFlex := tview.NewFlex().SetDirection(tview.FlexRow)
 	popupFlex.SetBorder(true)
-	popupFlex.SetTitle(" 连接详情 ")
+	popupFlex.SetTitle(fmt.Sprintf(" %s ", i18n.T("conn.detail_title")))
 	popupFlex.AddItem(textView, 0, 1, false)
 	popupFlex.AddItem(closeBtn, 1, 0, true)
 
@@ -453,14 +465,12 @@ func (c *ConnectionsPage) focusTable() {
 	ui.Updater.SetFocus(c.connectionsTable)
 }
 
-
-
 // formatChains formats proxy chains for display
 func (c *ConnectionsPage) formatChains(chains []string) string {
 	if len(chains) == 0 {
 		return "DIRECT"
 	}
-	return strings.Join(chains, " → ")
+	return ui.StripFlagEmoji(strings.Join(chains, " → "))
 }
 
 // safeString returns defaultValue if s is empty
@@ -479,13 +489,13 @@ func (c *ConnectionsPage) updateStatus() {
 	refreshCount := c.refreshCount
 	c.mutex.RUnlock()
 
-	status := fmt.Sprintf(`%d 个连接 | 更新: %s (#%d)`,
+	status := fmt.Sprintf(`%d connections | Updated: %s (#%d)`,
 		connCount,
 		lastUpdate.Format("15:04"),
 		refreshCount,
 	)
 
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		c.statusText.SetText(status)
 	})
 }
@@ -493,11 +503,11 @@ func (c *ConnectionsPage) updateStatus() {
 // closeSelectedConnection closes the selected connection
 func (c *ConnectionsPage) closeSelectedConnection() {
 	if c.selectedConnID == "" {
-		c.showError("请先选择一个连接")
+		c.showError(i18n.T("conn.select_first"))
 		return
 	}
 
-	c.showInfo(fmt.Sprintf("正在关闭连接: %s", c.selectedConnID[:8]))
+	c.showInfo(fmt.Sprintf(i18n.T("conn.closing"), c.selectedConnID[:8]))
 
 	go func() {
 		// Check if we're still active before making API call
@@ -511,11 +521,11 @@ func (c *ConnectionsPage) closeSelectedConnection() {
 
 		err := api.Client.CloseConnection(c.selectedConnID)
 		if err != nil {
-			c.showError(fmt.Sprintf("关闭连接失败: %v", err))
+			c.showError(fmt.Sprintf(i18n.T("conn.close_failed"), err))
 			return
 		}
 
-		c.showSuccess("连接已关闭")
+		c.showSuccess(i18n.T("conn.closed"))
 
 		// Refresh data to remove closed connection
 		time.Sleep(500 * time.Millisecond)
@@ -527,7 +537,7 @@ func (c *ConnectionsPage) closeSelectedConnection() {
 
 		if isActive {
 			c.loadConnectionsData()
-			go ui.Updater.UpdateUi(func() {
+			ui.Updater.PostUi(func() {
 				c.updateConnectionsTable()
 			})
 		}
@@ -545,10 +555,10 @@ func (c *ConnectionsPage) refresh() {
 		return
 	}
 
-	c.showInfo("正在刷新连接数据...")
+	c.showInfo(i18n.T("conn.refreshing"))
 	c.loadConnectionsData()
 
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		c.updateConnectionsTable()
 	})
 }
@@ -562,10 +572,10 @@ func (c *ConnectionsPage) toggleAutoRefresh() {
 
 	if autoRefresh {
 		c.startAutoRefresh()
-		c.showSuccess("自动刷新已开启")
+		c.showSuccess("Auto-refresh on")
 	} else {
 		c.stopAutoRefresh()
-		c.showSuccess("自动刷新已关闭")
+		c.showSuccess("Auto-refresh off")
 	}
 
 	c.updateStatus()
@@ -606,7 +616,7 @@ func (c *ConnectionsPage) startAutoRefresh() {
 				}
 
 				c.loadConnectionsData()
-				go ui.Updater.UpdateUi(func() {
+				ui.Updater.PostUi(func() {
 					c.updateConnectionsTable()
 				})
 			}
@@ -629,24 +639,24 @@ func (c *ConnectionsPage) stopAutoRefresh() {
 // showError shows an error message in the status area
 func (c *ConnectionsPage) showError(message string) {
 	log.Printf("Error: %s", message)
-	go ui.Updater.UpdateUi(func() {
-		c.statusText.SetText(fmt.Sprintf("[red]错误:[white] %s", message))
+	ui.Updater.PostUi(func() {
+		c.statusText.SetText(fmt.Sprintf("[red]%s", message))
 	})
 }
 
 // showSuccess shows a success message in the status area
 func (c *ConnectionsPage) showSuccess(message string) {
 	log.Printf("Success: %s", message)
-	go ui.Updater.UpdateUi(func() {
-		c.statusText.SetText(fmt.Sprintf("[green]成功:[white] %s", message))
+	ui.Updater.PostUi(func() {
+		c.statusText.SetText(fmt.Sprintf("[green]%s", message))
 	})
 }
 
 // showInfo shows an info message in the status area
 func (c *ConnectionsPage) showInfo(message string) {
 	log.Printf("Info: %s", message)
-	go ui.Updater.UpdateUi(func() {
-		c.statusText.SetText(fmt.Sprintf("[yellow]信息:[white] %s", message))
+	ui.Updater.PostUi(func() {
+		c.statusText.SetText(fmt.Sprintf("[yellow]%s", message))
 	})
 }
 

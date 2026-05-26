@@ -9,6 +9,7 @@ import (
 
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
 
 	"github.com/gdamore/tcell/v2"
@@ -99,16 +100,16 @@ func (r *RulesPage) setupUI() {
 	r.AddItem(content, 0, 1, true)
 
 	r.SetBorder(true)
-	r.SetTitle(" 规则管理 ")
+	r.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.title")))
 }
 
 func (r *RulesPage) setupAddForm() {
 	r.addForm = tview.NewForm()
 	r.addForm.SetBorder(true)
-	r.addForm.SetTitle(" 添加规则 ")
+	r.addForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.add_title")))
 	r.addForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.typeDrop = tview.NewDropDown()
-	r.typeDrop.SetLabel("类型 ")
+	r.typeDrop.SetLabel(i18n.T("rule.type_label"))
 	r.typeDrop.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.typeDrop.SetListStyles(
 		tcell.StyleDefault.Background(tcell.ColorDarkGray).Foreground(tcell.ColorWhite),
@@ -120,18 +121,18 @@ func (r *RulesPage) setupAddForm() {
 	r.typeDrop.SetCurrentOption(0)
 	r.payloadInput = tview.NewInputField()
 	r.payloadInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	r.payloadInput.SetLabel("内容 ")
+	r.payloadInput.SetLabel(i18n.T("rule.content_label"))
 	r.payloadInput.SetFieldWidth(40)
 	r.proxyInput = tview.NewInputField()
 	r.proxyInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	r.proxyInput.SetLabel("代理策略 ")
+	r.proxyInput.SetLabel(i18n.T("rule.proxy_label"))
 	r.proxyInput.SetFieldWidth(20)
 
 	r.addForm.AddFormItem(r.typeDrop)
 	r.addForm.AddFormItem(r.payloadInput)
 	r.addForm.AddFormItem(r.proxyInput)
-	r.addForm.AddButton(" 保存 ", r.onAdd)
-	r.addForm.AddButton(" 取消 ", r.onCancelAdd)
+	r.addForm.AddButton(i18n.T("rule.save_btn"), r.onAdd)
+	r.addForm.AddButton(i18n.T("rule.cancel_btn"), r.onCancelAdd)
 	r.addForm.SetButtonsAlign(tview.AlignCenter)
 	r.addForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	r.addForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
@@ -140,23 +141,23 @@ func (r *RulesPage) setupAddForm() {
 func (r *RulesPage) setupSearchInput() {
 	r.searchInput = tview.NewInputField()
 	r.searchInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	r.searchInput.SetLabel("搜索: ")
-	r.searchInput.SetPlaceholder("输入关键词过滤规则...")
+	r.searchInput.SetLabel(i18n.T("rule.search_label"))
+	r.searchInput.SetPlaceholder(i18n.T("rule.search_placeholder"))
 	r.searchInput.SetChangedFunc(func(text string) {
 		r.filterText = strings.TrimSpace(text)
 		r.updateTable()
 	})
 	r.searchInput.SetBorder(true)
-	r.searchInput.SetTitle(" 过滤 ")
+	r.searchInput.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.filter")))
 }
 
 func (r *RulesPage) setupTable() {
 	r.table = tview.NewTable().SetFixed(1, 0)
 	r.table.SetSelectable(true, false)
 	r.table.SetBorder(true)
-	r.table.SetTitle(" 规则列表 ")
+	r.table.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.list_title")))
 
-	headers := []string{"类型", "内容", "代理"}
+	headers := []string{i18n.T("rule.col_type"), i18n.T("rule.col_content"), i18n.T("rule.col_proxy")}
 	for i, header := range headers {
 		cell := tview.NewTableCell(header).
 			SetTextColor(tcell.ColorGray).
@@ -169,37 +170,37 @@ func (r *RulesPage) setupTable() {
 func (r *RulesPage) setupActionBar() {
 	r.actionBar = tview.NewFlex()
 	r.actionBar.SetBorder(true)
-	r.actionBar.SetTitle(" 操作 ")
+	r.actionBar.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.actions")))
 
 	// Gray button style — no light blue
 	btnStyle := tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite)
 	btnFocus := tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite)
 
-	addBtn := tview.NewButton("[A] 添加")
+	addBtn := tview.NewButton(i18n.T("rule.add_action"))
 	addBtn.SetStyle(btnStyle)
 	addBtn.SetActivatedStyle(btnFocus)
 	addBtn.SetSelectedFunc(r.showAddDialog)
-	deleteBtn := tview.NewButton("[D] 删除")
+	deleteBtn := tview.NewButton(i18n.T("rule.del_action"))
 	deleteBtn.SetStyle(btnStyle)
 	deleteBtn.SetActivatedStyle(btnFocus)
 	deleteBtn.SetSelectedFunc(func() { go r.deleteSelected() })
-	moveUpBtn := tview.NewButton("[↑] 上移")
+	moveUpBtn := tview.NewButton(i18n.T("rule.up_action"))
 	moveUpBtn.SetStyle(btnStyle)
 	moveUpBtn.SetActivatedStyle(btnFocus)
 	moveUpBtn.SetSelectedFunc(func() { go r.moveUp() })
-	moveDownBtn := tview.NewButton("[↓] 下移")
+	moveDownBtn := tview.NewButton(i18n.T("rule.down_action"))
 	moveDownBtn.SetStyle(btnStyle)
 	moveDownBtn.SetActivatedStyle(btnFocus)
 	moveDownBtn.SetSelectedFunc(func() { go r.moveDown() })
-	moveToBtn := tview.NewButton("[M] 移动至")
+	moveToBtn := tview.NewButton(i18n.T("rule.move_action"))
 	moveToBtn.SetStyle(btnStyle)
 	moveToBtn.SetActivatedStyle(btnFocus)
 	moveToBtn.SetSelectedFunc(func() { go r.showMoveToDialog() })
-	refreshBtn := tview.NewButton("[R] 刷新")
+	refreshBtn := tview.NewButton(i18n.T("rule.refresh_action"))
 	refreshBtn.SetStyle(btnStyle)
 	refreshBtn.SetActivatedStyle(btnFocus)
 	refreshBtn.SetSelectedFunc(func() { go r.refresh() })
-	pasteBtn := tview.NewButton("[P] 粘贴导入")
+	pasteBtn := tview.NewButton(i18n.T("rule.paste_action"))
 	pasteBtn.SetStyle(btnStyle)
 	pasteBtn.SetActivatedStyle(btnFocus)
 	pasteBtn.SetSelectedFunc(r.showPasteImport)
@@ -216,17 +217,17 @@ func (r *RulesPage) setupActionBar() {
 func (r *RulesPage) setupMoveToForm() {
 	r.moveToInput = tview.NewInputField()
 	r.moveToInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	r.moveToInput.SetLabel("目标位置 ")
-	r.moveToInput.SetPlaceholder("输入序号 (1-总条数)")
+	r.moveToInput.SetLabel(i18n.T("rule.move_target"))
+	r.moveToInput.SetPlaceholder(i18n.T("rule.move_hint"))
 	r.moveToInput.SetFieldWidth(10)
 
 	r.moveToForm = tview.NewForm()
 	r.moveToForm.SetBorder(true)
-	r.moveToForm.SetTitle(" 移动规则至 ")
+	r.moveToForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.move_title")))
 	r.moveToForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.moveToForm.AddFormItem(r.moveToInput)
-	r.moveToForm.AddButton(" 确认 ", r.onMoveTo)
-	r.moveToForm.AddButton(" 取消 ", func() {
+	r.moveToForm.AddButton(i18n.T("rule.confirm_btn"), r.onMoveTo)
+	r.moveToForm.AddButton(i18n.T("rule.cancel_move_btn"), func() {
 		r.hideMoveToDialog()
 	})
 	r.moveToForm.SetButtonsAlign(tview.AlignCenter)
@@ -237,9 +238,9 @@ func (r *RulesPage) setupMoveToForm() {
 func (r *RulesPage) setupStatusText() {
 	r.statusText = tview.NewTextView()
 	r.statusText.SetBorder(true)
-	r.statusText.SetTitle(" 状态 ")
+	r.statusText.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.status")))
 	r.statusText.SetDynamicColors(true)
-	r.statusText.SetText("[green]就绪[white]")
+	r.statusText.SetText(i18n.T("rule.status_ready"))
 
 }
 
@@ -322,20 +323,11 @@ func (r *RulesPage) hideAddDialog() {
 
 func (r *RulesPage) setupPasteImport() {
 	r.pasteTextArea = tview.NewTextArea()
-	r.pasteTextArea.SetPlaceholder(`粘贴多条规则，每行一条，格式:
-  - TYPE,payload,proxy
-
-示例:
-  - DOMAIN-SUFFIX,google.com,PROXY
-  - DOMAIN-KEYWORD,google,PROXY
-  - GEOIP,CN,DIRECT
-  - MATCH,PROXY
-
-支持 # 注释行，"- " 前缀可选。`)
+	r.pasteTextArea.SetPlaceholder(i18n.T("rule.paste_placeholder"))
 	r.pasteTextArea.SetBorder(true)
 
 	btnBar := tview.NewFlex()
-	importBtn := tview.NewButton(" 导入 ")
+	importBtn := tview.NewButton(i18n.T("rule.import_btn"))
 	importBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	importBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	importBtn.SetSelectedFunc(func() {
@@ -343,7 +335,7 @@ func (r *RulesPage) setupPasteImport() {
 			go r.processPasteImport()
 		}
 	})
-	cancelBtn := tview.NewButton(" 取消 ")
+	cancelBtn := tview.NewButton(i18n.T("rule.import_cancel"))
 	cancelBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	cancelBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	cancelBtn.SetSelectedFunc(func() {
@@ -357,7 +349,7 @@ func (r *RulesPage) setupPasteImport() {
 
 	r.pasteImportForm = tview.NewFlex().SetDirection(tview.FlexRow)
 	r.pasteImportForm.SetBorder(true)
-	r.pasteImportForm.SetTitle(" 粘贴导入规则 ")
+	r.pasteImportForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.import_title")))
 	r.pasteImportForm.AddItem(r.pasteTextArea, 0, 1, true)
 	r.pasteImportForm.AddItem(btnBar, 3, 0, false)
 }
@@ -416,10 +408,10 @@ func cleanPasteLine(line string) string {
 
 func (r *RulesPage) processPasteImport() {
 	// All UI reads must run on the UI goroutine
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		text := r.pasteTextArea.GetText()
 		r.hidePasteImport()
-		r.showStatus("[yellow]正在导入规则...[white]")
+		r.showStatus(i18n.T("rule.importing"))
 		go r.doProcessPasteImport(text)
 	})
 }
@@ -445,7 +437,7 @@ func (r *RulesPage) doProcessPasteImport(text string) {
 			ruleType := strings.TrimSpace(parts[0])
 			proxy := strings.TrimSpace(parts[1])
 			if ruleType == "" || proxy == "" {
-				errs = append(errs, fmt.Sprintf("无效行: %s", line))
+				errs = append(errs, fmt.Sprintf(i18n.T("rule.invalid_line"), line))
 				continue
 			}
 			rules = append(rules, config.RuleEntry{Type: ruleType, Payload: "", Proxy: proxy})
@@ -454,23 +446,23 @@ func (r *RulesPage) doProcessPasteImport(text string) {
 			payload := strings.TrimSpace(parts[1])
 			proxy := strings.TrimSpace(parts[2])
 			if ruleType == "" || proxy == "" {
-				errs = append(errs, fmt.Sprintf("无效行 (缺少必要字段): %s", line))
+				errs = append(errs, fmt.Sprintf(i18n.T("rule.invalid_line"), fmt.Sprintf("(missing fields) %s", line)))
 				continue
 			}
 			rules = append(rules, config.RuleEntry{Type: ruleType, Payload: payload, Proxy: proxy})
 		} else {
-			errs = append(errs, fmt.Sprintf("无效行 (格式错误): %s", line))
+			errs = append(errs, fmt.Sprintf(i18n.T("rule.invalid_line"), fmt.Sprintf("(format error) %s", line)))
 			continue
 		}
 	}
 
 	if len(rules) == 0 {
-		msg := "[red]没有有效的规则可导入[white]"
+		msg := i18n.T("rule.import_no_valid")
 		if len(errs) > 0 {
-			msg += fmt.Sprintf(" | %d 条失败", len(errs))
+			msg += fmt.Sprintf(i18n.T("rule.import_fail_count"), len(errs))
 		}
 		r.refresh()
-		go ui.Updater.UpdateUi(func() {
+		ui.Updater.PostUi(func() {
 			r.showStatus(msg)
 		})
 		return
@@ -479,8 +471,8 @@ func (r *RulesPage) doProcessPasteImport(text string) {
 	cp, err := config.BatchAddRulesToConfig(rules)
 	if err != nil {
 		log.Printf("[rules] batch import failed: %v", err)
-		go ui.Updater.UpdateUi(func() {
-			r.showStatus(fmt.Sprintf("[red]批量导入失败: %v[white]", err))
+		ui.Updater.PostUi(func() {
+			r.showStatus(fmt.Sprintf(i18n.T("rule.import_fail"), err))
 		})
 		return
 	}
@@ -488,20 +480,20 @@ func (r *RulesPage) doProcessPasteImport(text string) {
 	if err := api.Client.ReloadConfig(cp); err != nil {
 		log.Printf("[rules] hot-reload failed: %v", err)
 		// refresh() 内部也会尝试 ReloadConfig，给第二次机会
-		go ui.Updater.UpdateUi(func() {
-			r.showStatus(fmt.Sprintf("[red]规则已写入文件，但重载失败: %v[white]", err))
+		ui.Updater.PostUi(func() {
+			r.showStatus(fmt.Sprintf(i18n.T("rule.reload_fail"), err))
 		})
 		r.refresh()
 		return
 	}
 
-	msg := fmt.Sprintf("[green]成功导入 %d 条规则[white]", len(rules))
+	msg := fmt.Sprintf(i18n.T("rule.import_ok"), len(rules))
 	if len(errs) > 0 {
-		msg += fmt.Sprintf(" | [red]%d 条跳过[white]", len(errs))
+		msg += fmt.Sprintf(i18n.T("rule.import_skip"), len(errs))
 		log.Printf("[rules] paste import skipped: %v", errs)
 	}
 	r.refresh()
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		r.showStatus(msg)
 	})
 }
@@ -514,15 +506,15 @@ func (r *RulesPage) onAdd() {
 	// MATCH and certain rule types have no payload concept
 	needsPayload := ruleType != "MATCH"
 	if needsPayload && (payload == "") {
-		r.showStatus("[red]该规则类型必须填写内容[white]")
+		r.showStatus(i18n.T("rule.type_required"))
 		return
 	}
 	if proxy == "" {
-		r.showStatus("[red]代理策略不能为空[white]")
+		r.showStatus(i18n.T("rule.proxy_required"))
 		return
 	}
 
-	r.showStatus(fmt.Sprintf("[yellow]正在添加规则 %s,%s,%s...[white]", ruleType, payload, proxy))
+	r.showStatus(fmt.Sprintf(i18n.T("rule.adding"), ruleType, payload, proxy))
 	r.hideAddDialog()
 	go r.saveRule(ruleType, payload, proxy)
 }
@@ -534,16 +526,16 @@ func (r *RulesPage) onCancelAdd() {
 func (r *RulesPage) saveRule(ruleType, payload, proxy string) {
 	configPath, err := config.AddRuleToConfig(ruleType, payload, proxy)
 	if err != nil {
-		go ui.Updater.UpdateUi(func() {
-			r.showStatus(fmt.Sprintf("[red]添加失败: %v[white]", err))
+		ui.Updater.PostUi(func() {
+			r.showStatus(fmt.Sprintf(i18n.T("rule.add_fail"), err))
 		})
 		return
 	}
 
 	if err := api.Client.ReloadConfig(configPath); err != nil {
 		log.Printf("[rules] hot-reload failed: %v", err)
-		go ui.Updater.UpdateUi(func() {
-			r.showStatus(fmt.Sprintf("[red]规则已写入文件，但重载失败: %v[white]", err))
+		ui.Updater.PostUi(func() {
+			r.showStatus(fmt.Sprintf(i18n.T("rule.reload_fail"), err))
 		})
 		return
 	}
@@ -553,10 +545,10 @@ func (r *RulesPage) saveRule(ruleType, payload, proxy string) {
 
 func (r *RulesPage) deleteSelected() {
 	// All UI reads must run on the UI goroutine
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		row, _ := r.table.GetSelection()
 		if row <= 0 {
-			r.showStatus("[red]请先选择一条规则[white]")
+			r.showStatus(i18n.T("rule.no_selection"))
 			return
 		}
 
@@ -567,7 +559,7 @@ func (r *RulesPage) deleteSelected() {
 		}
 		rule := r.rules[ruleIdx]
 
-		r.showStatus(fmt.Sprintf("[yellow]正在删除规则 %s,%s,%s...[white]", rule.Type, rule.Payload, rule.Proxy))
+		r.showStatus(fmt.Sprintf(i18n.T("rule.deleting"), rule.Type, rule.Payload, rule.Proxy))
 
 		// Launch background work with captured data
 		go r.doDelete(ruleIdx)
@@ -580,16 +572,16 @@ func (r *RulesPage) doDelete(ruleIdx int) {
 	configRules, err := config.GetRulesFromConfig()
 	if err != nil {
 		log.Printf("[rules] GetRulesFromConfig failed: %v", err)
-		go ui.Updater.UpdateUi(func() {
-			r.showStatus(fmt.Sprintf("[red]读取配置失败: %v[white]", err))
+		ui.Updater.PostUi(func() {
+			r.showStatus(fmt.Sprintf(i18n.T("rule.read_fail"), err))
 		})
 		return
 	}
 
 	if ruleIdx >= len(configRules) {
 		// Rule might be from a rule-provider, not in the config file's rules list.
-		go ui.Updater.UpdateUi(func() {
-			r.showStatus(fmt.Sprintf("[red]此规则来自规则提供者，不在配置文件内。\n请按 [F4] 进入配置管理器，删除对应的 RULE-SET/GEOSITE/GEOIP 条目[white]"))
+		ui.Updater.PostUi(func() {
+			r.showStatus(i18n.T("rule.delete_from_provider"))
 		})
 		return
 	}
@@ -597,16 +589,16 @@ func (r *RulesPage) doDelete(ruleIdx int) {
 	configPath, err := config.DeleteRuleFromConfig(ruleIdx)
 	if err != nil {
 		log.Printf("[rules] DeleteRuleFromConfig failed: %v", err)
-		go ui.Updater.UpdateUi(func() {
-			r.showStatus(fmt.Sprintf("[red]删除失败: %v[white]", err))
+		ui.Updater.PostUi(func() {
+			r.showStatus(fmt.Sprintf(i18n.T("rule.delete_fail"), err))
 		})
 		return
 	}
 
 	if err := api.Client.ReloadConfig(configPath); err != nil {
 		log.Printf("[rules] hot-reload failed: %v", err)
-		go ui.Updater.UpdateUi(func() {
-			r.showStatus(fmt.Sprintf("[red]规则已从文件删除，但重载失败: %v[white]", err))
+		ui.Updater.PostUi(func() {
+			r.showStatus(fmt.Sprintf(i18n.T("rule.reload_fail"), err))
 		})
 		return
 	}
@@ -615,27 +607,26 @@ func (r *RulesPage) doDelete(ruleIdx int) {
 }
 
 func (r *RulesPage) moveUp() {
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		row, _ := r.table.GetSelection()
 		if row <= 1 {
-			r.showStatus("[yellow]已经是第一条规则了[white]")
+			r.showStatus(i18n.T("rule.first_rule"))
 			return
 		}
 		ruleIdx := r.findRuleIndex(row)
 		if ruleIdx < 0 || ruleIdx >= len(r.rules) {
 			return
 		}
-		rule := r.rules[ruleIdx]
-		r.showStatus(fmt.Sprintf("[yellow]正在上移规则 %s,%s,%s...[white]", rule.Type, rule.Payload, rule.Proxy))
+		r.showStatus(fmt.Sprintf("[yellow]%s...[white]", i18n.T("rule.moving_up")))
 		go r.doMoveRule(ruleIdx, ruleIdx-1)
 	})
 }
 
 func (r *RulesPage) moveDown() {
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		row, _ := r.table.GetSelection()
 		if row <= 0 {
-			r.showStatus("[red]请先选择一条规则[white]")
+			r.showStatus(i18n.T("rule.no_selection"))
 			return
 		}
 		ruleIdx := r.findRuleIndex(row)
@@ -643,11 +634,10 @@ func (r *RulesPage) moveDown() {
 			return
 		}
 		if ruleIdx >= len(r.rules)-1 {
-			r.showStatus("[yellow]已经是最后一条规则了[white]")
+			r.showStatus(i18n.T("rule.last_rule"))
 			return
 		}
-		rule := r.rules[ruleIdx]
-		r.showStatus(fmt.Sprintf("[yellow]正在下移规则 %s,%s,%s...[white]", rule.Type, rule.Payload, rule.Proxy))
+		r.showStatus(fmt.Sprintf("[yellow]%s...[white]", i18n.T("rule.moving_down")))
 		go r.doMoveRule(ruleIdx, ruleIdx+1)
 	})
 }
@@ -659,7 +649,7 @@ func (r *RulesPage) showMoveToDialog() {
 	// Read selected rule info on UI goroutine
 	row, _ := r.table.GetSelection()
 	if row <= 0 {
-		r.showStatus("[red]请先选择一条规则[white]")
+		r.showStatus(i18n.T("rule.no_selection"))
 		return
 	}
 	ruleIdx := r.findRuleIndex(row)
@@ -672,7 +662,7 @@ func (r *RulesPage) showMoveToDialog() {
 	r.moveToInput.SetText("")
 	r.moveToInput.SetPlaceholder(fmt.Sprintf("1-%d", len(r.rules)))
 	// Show current position as hint
-	r.moveToForm.SetTitle(fmt.Sprintf(" 移动规则 #%d (%s,%s,%s) 至 ", row, rule.Type, rule.Payload, rule.Proxy))
+	r.moveToForm.SetTitle(fmt.Sprintf(i18n.T("rule.move_to_title"), row, rule.Type, rule.Payload, rule.Proxy))
 	r.AddItem(r.moveToForm, 0, 1, true)
 }
 
@@ -685,10 +675,10 @@ func (r *RulesPage) hideMoveToDialog() {
 }
 
 func (r *RulesPage) onMoveTo() {
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		row, _ := r.table.GetSelection()
 		if row <= 0 {
-			r.showStatus("[red]请先选择一条规则[white]")
+			r.showStatus(i18n.T("rule.no_selection"))
 			r.hideMoveToDialog()
 			return
 		}
@@ -701,34 +691,34 @@ func (r *RulesPage) onMoveTo() {
 		text := strings.TrimSpace(r.moveToInput.GetText())
 		targetNum, err := strconv.Atoi(text)
 		if err != nil || targetNum < 1 || targetNum > len(r.rules) {
-			r.showStatus(fmt.Sprintf("[red]无效的位置，请输入 1-%d 之间的数字[white]", len(r.rules)))
+			r.showStatus(fmt.Sprintf(i18n.T("rule.invalid_position"), len(r.rules)))
 			return
 		}
 		toIdx := targetNum - 1 // convert to 0-based
 
 		if fromIdx == toIdx {
-			r.showStatus("[yellow]目标位置与当前位置相同[white]")
+			r.showStatus(i18n.T("rule.move_same"))
 			r.hideMoveToDialog()
 			return
 		}
 
-		r.showStatus(fmt.Sprintf("[yellow]正在移动规则 #%d 至 #%d...[white]", fromIdx+1, toIdx+1))
+		r.showStatus(fmt.Sprintf(i18n.T("rule.moving"), fromIdx+1, toIdx+1))
 		r.hideMoveToDialog()
 
 		go func() {
 			configPath, err := config.MoveRuleToPosition(fromIdx, toIdx)
 			if err != nil {
 				log.Printf("[rules] MoveRuleToPosition failed: %v", err)
-				go ui.Updater.UpdateUi(func() {
-					r.showStatus(fmt.Sprintf("[red]移动失败: %v[white]", err))
+				ui.Updater.PostUi(func() {
+					r.showStatus(fmt.Sprintf(i18n.T("rule.move_fail"), err))
 				})
 				return
 			}
 
 			if err := api.Client.ReloadConfig(configPath); err != nil {
 				log.Printf("[rules] hot-reload after move failed: %v", err)
-				go ui.Updater.UpdateUi(func() {
-					r.showStatus(fmt.Sprintf("[red]规则已移动，但重载失败: %v[white]", err))
+				ui.Updater.PostUi(func() {
+					r.showStatus(fmt.Sprintf(i18n.T("rule.reload_fail"), err))
 				})
 				return
 			}
@@ -742,16 +732,16 @@ func (r *RulesPage) doMoveRule(fromIdx, toIdx int) {
 	configPath, err := config.MoveRuleInConfig(fromIdx, toIdx)
 	if err != nil {
 		log.Printf("[rules] MoveRuleInConfig failed: %v", err)
-		go ui.Updater.UpdateUi(func() {
-			r.showStatus(fmt.Sprintf("[red]移动失败: %v[white]", err))
+		ui.Updater.PostUi(func() {
+			r.showStatus(fmt.Sprintf(i18n.T("rule.move_fail"), err))
 		})
 		return
 	}
 
 	if err := api.Client.ReloadConfig(configPath); err != nil {
 		log.Printf("[rules] hot-reload after move failed: %v", err)
-		go ui.Updater.UpdateUi(func() {
-			r.showStatus(fmt.Sprintf("[red]规则位置已交换，但重载失败: %v[white]", err))
+		ui.Updater.PostUi(func() {
+			r.showStatus(fmt.Sprintf(i18n.T("rule.reload_fail"), err))
 		})
 		return
 	}
@@ -784,8 +774,8 @@ func (r *RulesPage) findRuleIndex(tableRow int) int {
 func (r *RulesPage) refresh() {
 	id := atomic.AddInt64(&r.refreshId, 1)
 
-	go ui.Updater.UpdateUi(func() {
-		r.showStatus("[yellow]加载规则中...[white]")
+	ui.Updater.PostUi(func() {
+		r.showStatus(i18n.T("rule.loading"))
 	})
 	go func() {
 		// Ensure mihomo has the latest config from file before querying rules
@@ -799,8 +789,8 @@ func (r *RulesPage) refresh() {
 		if err != nil {
 			// Only show error if no newer refresh is pending
 			if atomic.LoadInt64(&r.refreshId) == id {
-				go ui.Updater.UpdateUi(func() {
-					r.showStatus(fmt.Sprintf("[red]获取规则失败: %v[white]", err))
+				ui.Updater.PostUi(func() {
+					r.showStatus(fmt.Sprintf(i18n.T("rule.fetch_fail"), err))
 				})
 			}
 			return
@@ -817,10 +807,10 @@ func (r *RulesPage) refresh() {
 
 		// Only apply the result if no newer refresh was started
 		if atomic.LoadInt64(&r.refreshId) == id {
-			go ui.Updater.UpdateUi(func() {
+			ui.Updater.PostUi(func() {
 				r.rules = displayRules
 				r.updateTable()
-				r.showStatus(fmt.Sprintf("[green]%d[-] 条规则", len(rulesData)))
+				r.showStatus(fmt.Sprintf("[green]%d[-] %s", len(rulesData), i18n.T("rule.rows")))
 			})
 		}
 	}()
@@ -829,7 +819,7 @@ func (r *RulesPage) refresh() {
 func (r *RulesPage) updateTable() {
 	r.table.Clear()
 
-	headers := []string{"#", "类型", "内容", "代理"}
+	headers := []string{i18n.T("rule.col_number"), i18n.T("rule.col_type"), i18n.T("rule.col_content"), i18n.T("rule.col_proxy")}
 	for i, header := range headers {
 		cell := tview.NewTableCell(header).
 			SetTextColor(tcell.ColorGray).
@@ -873,14 +863,14 @@ func (r *RulesPage) updateTable() {
 
 	if visibleCount == 0 {
 		if totalCount == 0 {
-			r.showStatus("[yellow]暂无规则数据[white]")
+			r.showStatus(i18n.T("rule.no_rules"))
 		} else {
-			r.showStatus(fmt.Sprintf("[yellow]未找到匹配的规则（共 %d 条）[white]", totalCount))
+			r.showStatus(fmt.Sprintf(i18n.T("rule.filter_match"), totalCount))
 		}
 	} else {
-		statusMsg := fmt.Sprintf("[green]%d[-] 条规则", totalCount)
+		statusMsg := fmt.Sprintf("[green]%d[-] %s", totalCount, i18n.T("rule.rows"))
 		if r.filterText != "" {
-			statusMsg = fmt.Sprintf("[green]%d/%d[-] 条规则", visibleCount, totalCount)
+			statusMsg = fmt.Sprintf("[green]%d/%d[-] %s", visibleCount, totalCount, i18n.T("rule.rows"))
 		}
 		r.showStatus(statusMsg)
 	}

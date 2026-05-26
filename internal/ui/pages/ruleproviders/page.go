@@ -8,6 +8,7 @@ import (
 
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
 
 	"github.com/gdamore/tcell/v2"
@@ -77,20 +78,20 @@ func (p *Page) setupUI() {
 	rightPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	p.detailView = tview.NewTextView()
 	p.detailView.SetBorder(true)
-	p.detailView.SetTitle(" 规则提供者详情 ")
+	p.detailView.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.detail_title")))
 	p.detailView.SetDynamicColors(true)
 	p.detailView.SetWordWrap(true)
 
 	p.actionBar = tview.NewFlex()
 	p.actionBar.SetBorder(true)
-	p.actionBar.SetTitle(" 操作 ")
+	p.actionBar.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.actions")))
 	p.setupActionBar()
 
 	p.status = tview.NewTextView()
 	p.status.SetBorder(true)
-	p.status.SetTitle(" 状态 ")
+	p.status.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.status")))
 	p.status.SetDynamicColors(true)
-	p.status.SetText("[green]就绪[white]")
+	p.status.SetText(i18n.T("rp.status_ready"))
 
 	rightPanel.AddItem(p.detailView, 0, 3, false)
 	rightPanel.AddItem(p.actionBar, 3, 0, false)
@@ -98,18 +99,18 @@ func (p *Page) setupUI() {
 
 	p.importForm = tview.NewForm()
 	p.importForm.SetBorder(true)
-	p.importForm.SetTitle(" 导入规则提供者 ")
+	p.importForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.import_title")))
 	p.importForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput = tview.NewInputField()
 	p.nameInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	p.nameInput.SetLabel("名称 ")
+	p.nameInput.SetLabel(i18n.T("rp.name_label"))
 	p.nameInput.SetFieldWidth(30)
 	p.urlInput = tview.NewInputField()
 	p.urlInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.urlInput.SetLabel("URL ")
 	p.urlInput.SetFieldWidth(50)
 	p.behaviorSelect = tview.NewDropDown()
-	p.behaviorSelect.SetLabel("行为 ")
+	p.behaviorSelect.SetLabel(i18n.T("rp.behavior_label"))
 	p.behaviorSelect.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.behaviorSelect.AddOption("domain", nil)
 	p.behaviorSelect.AddOption("ipcidr", nil)
@@ -121,7 +122,7 @@ func (p *Page) setupUI() {
 	)
 	p.intervalInput = tview.NewInputField()
 	p.intervalInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	p.intervalInput.SetLabel("更新间隔(秒) ")
+	p.intervalInput.SetLabel(i18n.T("rp.interval_label"))
 	p.intervalInput.SetFieldWidth(10)
 	p.intervalInput.SetText("3600")
 
@@ -129,8 +130,8 @@ func (p *Page) setupUI() {
 	p.importForm.AddFormItem(p.urlInput)
 	p.importForm.AddFormItem(p.behaviorSelect)
 	p.importForm.AddFormItem(p.intervalInput)
-	p.importForm.AddButton(" 导入 ", p.onImportClicked)
-	p.importForm.AddButton(" 取消 ", p.onCancelImport)
+	p.importForm.AddButton(i18n.T("rp.import_btn"), p.onImportClicked)
+	p.importForm.AddButton(i18n.T("rp.cancel_btn"), p.onCancelImport)
 	p.importForm.SetButtonsAlign(tview.AlignCenter)
 	p.importForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	p.importForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
@@ -147,13 +148,13 @@ func (p *Page) setupUI() {
 	p.SetDirection(tview.FlexRow)
 	p.AddItem(mainFlex, 0, 1, true)
 	p.SetBorder(true)
-	p.SetTitle(" 规则提供者管理 ")
+	p.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.title")))
 }
 
 func (p *Page) setupSubList() {
 	p.subList = tview.NewList()
 	p.subList.SetBorder(true)
-	p.subList.SetTitle(" 规则提供者 ")
+	p.subList.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.sub_list_title")))
 	p.subList.SetMainTextColor(tcell.ColorWhite)
 	p.subList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
 	p.subList.SetSelectedTextColor(tcell.ColorBlack)
@@ -194,19 +195,19 @@ func (p *Page) setupSubList() {
 }
 
 func (p *Page) setupActionBar() {
-	refreshBtn := tview.NewButton("[R] 刷新")
+	refreshBtn := tview.NewButton(i18n.T("rp.refresh_action"))
 	refreshBtn.SetSelectedFunc(func() { go p.refresh() })
-	importBtn := tview.NewButton("[I] 导入")
+	importBtn := tview.NewButton(i18n.T("rp.import_action"))
 	importBtn.SetSelectedFunc(p.showImportForm)
-	quickImportBtn := tview.NewButton("[Q] 快速导入")
+	quickImportBtn := tview.NewButton(i18n.T("rp.quick_import_action"))
 	quickImportBtn.SetSelectedFunc(p.showQuickImportPage)
 	quickImportBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	quickImportBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	pasteBtn := tview.NewButton("[P] 粘贴导入")
+	pasteBtn := tview.NewButton(i18n.T("rp.paste_action"))
 	pasteBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	pasteBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	pasteBtn.SetSelectedFunc(p.showPasteImport)
-	deleteBtn := tview.NewButton("[D] 删除")
+	deleteBtn := tview.NewButton(i18n.T("rp.del_action"))
 	deleteBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	deleteBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	deleteBtn.SetSelectedFunc(func() { go p.deleteSelected() })
@@ -238,7 +239,7 @@ func (p *Page) showImportForm() {
 	p.showInput = true
 	p.mu.Unlock()
 
-	p.importForm.SetTitle(" 导入规则提供者 ")
+	p.importForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.import_title")))
 	p.nameInput.SetText("")
 	p.urlInput.SetText("")
 	p.behaviorSelect.SetCurrentOption(0)
@@ -271,15 +272,15 @@ func (p *Page) onImportClicked() {
 	}
 
 	if name == "" {
-		p.showError("名称不能为空")
+		p.showError(i18n.T("rp.name_empty"))
 		return
 	}
 	if url == "" {
-		p.showError("URL 不能为空")
+		p.showError(i18n.T("rp.url_empty"))
 		return
 	}
 
-	p.showStatus(fmt.Sprintf("[yellow]正在导入规则提供者 %s...[white]", name))
+	p.showStatus(fmt.Sprintf(i18n.T("rp.importing"), name))
 	go p.importFromURL(name, url, behavior, interval)
 }
 
@@ -294,7 +295,7 @@ func (p *Page) showQuickImportPage() {
 
 	quickList := tview.NewList()
 	quickList.SetBorder(true)
-	quickList.SetTitle(" 快速导入 - Loyalsoldier/clash-rules ")
+	quickList.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.quick_import_title")))
 	quickList.SetTitleAlign(tview.AlignLeft)
 	quickList.SetMainTextColor(tcell.ColorWhite)
 	quickList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
@@ -322,7 +323,7 @@ func (p *Page) showQuickImportPage() {
 		return ev
 	})
 
-	p.showStatus(fmt.Sprintf("[yellow]按 Enter 选择预设，Esc 返回[white]"))
+	p.showStatus(i18n.T("rp.quick_import_hint"))
 
 	p.AddItem(quickList, 0, 1, true)
 }
@@ -340,14 +341,14 @@ func (p *Page) hideQuickImport() {
 		if items > 1 {
 			p.RemoveItem(p.GetItem(items - 1))
 		}
-		p.status.SetText("[green]就绪[white]")
+		p.status.SetText(i18n.T("rp.status_ready"))
 	})
 }
 
 func (p *Page) importFromURL(name, url, behavior string, interval int) {
 	configPath, err := config.AddRuleProviderToConfig(name, url, behavior, interval)
 	if err != nil {
-		p.showError(fmt.Sprintf("导入失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("rp.import_fail"), err))
 		return
 	}
 
@@ -357,7 +358,7 @@ func (p *Page) importFromURL(name, url, behavior string, interval int) {
 
 	providers, err := config.GetRuleProvidersFromConfig()
 	if err != nil {
-		p.showError(fmt.Sprintf("读取配置失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("rp.config_read_fail"), err))
 		return
 	}
 
@@ -371,7 +372,7 @@ func (p *Page) importFromURL(name, url, behavior string, interval int) {
 			p.RemoveItem(p.importForm)
 		}
 		p.updateSubList()
-		p.status.SetText(fmt.Sprintf("[green]规则提供者 %s 已导入[white]", name))
+		p.status.SetText(fmt.Sprintf(i18n.T("rp.import_ok"), name))
 	})
 }
 
@@ -379,7 +380,7 @@ func (p *Page) deleteSelected() {
 	p.mu.Lock()
 	if p.selectedIndex < 0 || p.selectedIndex >= len(p.providers) {
 		p.mu.Unlock()
-		p.showError("请先选择一个规则提供者")
+		p.showError(i18n.T("rp.select_first"))
 		return
 	}
 	rp := p.providers[p.selectedIndex]
@@ -387,7 +388,7 @@ func (p *Page) deleteSelected() {
 
 	configPath, err := config.DeleteRuleProviderFromConfig(rp.Name)
 	if err != nil {
-		p.showError(fmt.Sprintf("删除失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("rp.del_fail"), err))
 		return
 	}
 
@@ -397,7 +398,7 @@ func (p *Page) deleteSelected() {
 
 	providers, err := config.GetRuleProvidersFromConfig()
 	if err != nil {
-		p.showError(fmt.Sprintf("读取配置失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("rp.config_read_fail"), err))
 		return
 	}
 
@@ -406,14 +407,14 @@ func (p *Page) deleteSelected() {
 		p.providers = providers
 		p.mu.Unlock()
 		p.updateSubList()
-		p.status.SetText(fmt.Sprintf("[green]已删除规则提供者 %s[white]", rp.Name))
+		p.status.SetText(fmt.Sprintf(i18n.T("rp.del_ok"), rp.Name))
 	})
 }
 
 func (p *Page) refresh() {
 	providers, err := config.GetRuleProvidersFromConfig()
 	if err != nil {
-		p.showError(fmt.Sprintf("读取配置失败: %v", err))
+		p.showError(fmt.Sprintf(i18n.T("rp.config_read_fail"), err))
 		return
 	}
 
@@ -428,7 +429,7 @@ func (p *Page) refresh() {
 		p.mu.Unlock()
 		p.updateSubList()
 		_ = apiProviders
-		p.status.SetText("[green]刷新完成[white]")
+		p.status.SetText(i18n.T("rp.refreshed"))
 	})
 }
 
@@ -439,7 +440,7 @@ func (p *Page) updateSubList() {
 	p.mu.Unlock()
 
 	if len(providers) == 0 {
-		p.subList.AddItem("(暂无规则提供者)", "按 I 键导入新规则提供者", 0, nil)
+		p.subList.AddItem(i18n.T("rp.empty_list"), i18n.T("rp.add_hint"), 0, nil)
 		return
 	}
 
@@ -455,27 +456,27 @@ func (p *Page) updateSubList() {
 		if rp.Interval > 0 {
 			sec += fmt.Sprintf(" | %ds", rp.Interval)
 		}
-		p.subList.AddItem(rp.Name, sec, 0, nil)
+		p.subList.AddItem(ui.StripFlagEmoji(rp.Name), sec, 0, nil)
 	}
 }
 
 func (p *Page) showDetail(rp config.RuleProviderEntry) {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("[yellow]名称:[white] %s\n", rp.Name))
-	b.WriteString(fmt.Sprintf("[yellow]行为:[white] %s\n", rp.Behavior))
+	b.WriteString(fmt.Sprintf(i18n.T("rp.detail_name"), ui.StripFlagEmoji(rp.Name)))
+	b.WriteString(fmt.Sprintf(i18n.T("rp.detail_behavior"), rp.Behavior))
 	if rp.URL != "" {
 		b.WriteString(fmt.Sprintf("[yellow]URL:[white] %s\n", rp.URL))
 	}
 	if rp.Path != "" {
-		b.WriteString(fmt.Sprintf("[yellow]路径:[white] %s\n", rp.Path))
+		b.WriteString(fmt.Sprintf(i18n.T("rp.detail_url"), rp.Path))
 	}
 	if rp.Type != "" {
-		b.WriteString(fmt.Sprintf("[yellow]类型:[white] %s\n", rp.Type))
+		b.WriteString(fmt.Sprintf(i18n.T("rp.detail_type"), rp.Type))
 	}
 	if rp.Interval > 0 {
-		b.WriteString(fmt.Sprintf("[yellow]更新间隔:[white] %ds\n", rp.Interval))
+		b.WriteString(fmt.Sprintf(i18n.T("rp.detail_interval"), rp.Interval))
 	}
-	b.WriteString("\n[gray]配置文件中的规则提供者定义[white]")
+	b.WriteString(i18n.T("rp.detail_in_config"))
 	p.detailView.SetText(b.String())
 }
 
@@ -512,25 +513,11 @@ type pasteProviderDef struct {
 
 func (p *Page) setupPasteImport() {
 	p.pasteTextArea = tview.NewTextArea()
-	p.pasteTextArea.SetPlaceholder(`粘贴规则提供者定义 (YAML 格式)，例如:
-
-  reject:
-    type: http
-    behavior: domain
-    url: "https://cdn.jsdelivr.net/gh/.../reject.txt"
-    path: ./ruleset/reject.yaml
-    interval: 86400
-
-  google:
-    type: http
-    behavior: domain
-    url: "https://cdn.jsdelivr.net/gh/.../google.txt"
-    path: ./ruleset/google.yaml
-    interval: 86400`)
+p.pasteTextArea.SetPlaceholder(i18n.T("rp.paste_placeholder"))
 	p.pasteTextArea.SetBorder(true)
 
 	btnBar := tview.NewFlex()
-	importBtn := tview.NewButton(" 导入 ")
+	importBtn := tview.NewButton(i18n.T("rp.import_btn"))
 	importBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	importBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	importBtn.SetSelectedFunc(func() {
@@ -538,7 +525,7 @@ func (p *Page) setupPasteImport() {
 			go p.processPasteImportYAML()
 		}
 	})
-	cancelBtn := tview.NewButton(" 取消 ")
+	cancelBtn := tview.NewButton(i18n.T("rp.cancel_btn"))
 	cancelBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	cancelBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	cancelBtn.SetSelectedFunc(func() {
@@ -552,7 +539,7 @@ func (p *Page) setupPasteImport() {
 
 	p.pasteImportForm = tview.NewFlex().SetDirection(tview.FlexRow)
 	p.pasteImportForm.SetBorder(true)
-	p.pasteImportForm.SetTitle(" 粘贴导入规则提供者 ")
+	p.pasteImportForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.import_title")))
 	p.pasteImportForm.AddItem(p.pasteTextArea, 0, 1, true)
 	p.pasteImportForm.AddItem(btnBar, 3, 0, false)
 }
@@ -568,7 +555,7 @@ func (p *Page) showPasteImport() {
 
 	p.pasteTextArea.SetText("", true)
 	p.AddItem(p.pasteImportForm, 0, 3, true)
-	p.showStatus("[yellow]粘贴 YAML 格式的规则提供者定义，按导入按钮开始[white]")
+	p.showStatus(i18n.T("rp.paste_hint"))
 }
 
 func (p *Page) hidePasteImport() {
@@ -580,7 +567,7 @@ func (p *Page) hidePasteImport() {
 	p.showInput = false
 	p.mu.Unlock()
 	p.RemoveItem(p.pasteImportForm)
-	p.showStatus("[green]就绪[white]")
+	p.showStatus(i18n.T("rp.status_ready"))
 }
 
 func (p *Page) processPasteImportYAML() {
@@ -590,29 +577,29 @@ func (p *Page) processPasteImportYAML() {
 	p.hidePasteImport()
 
 	if strings.TrimSpace(text) == "" {
-		p.showStatus("[red]粘贴内容为空[white]")
+		p.showStatus(i18n.T("rp.paste_empty"))
 		return
 	}
 
 	var rawProviders map[string]pasteProviderDef
 	if err := yaml.Unmarshal([]byte(text), &rawProviders); err != nil {
-		p.showStatus(fmt.Sprintf("[red]YAML 解析失败: %v[white]", err))
+		p.showStatus(fmt.Sprintf(i18n.T("rp.yaml_parse_fail"), err))
 		return
 	}
 
 	if len(rawProviders) == 0 {
-		p.showStatus("[red]未解析到任何规则提供者[white]")
+		p.showStatus(i18n.T("rp.no_providers_found"))
 		return
 	}
 
-	p.showStatus(fmt.Sprintf("[yellow]正在导入 %d 个规则提供者...[white]", len(rawProviders)))
+	p.showStatus(fmt.Sprintf(i18n.T("rp.importing_count"), len(rawProviders)))
 
 	var batch []config.RuleProviderBatchEntry
 	var errs []string
 
 	for name, def := range rawProviders {
 		if name == "" || def.URL == "" || def.Behavior == "" {
-			errs = append(errs, fmt.Sprintf("提供者 %q 缺少必要字段 (url/behavior)", name))
+			errs = append(errs, fmt.Sprintf(i18n.T("rp.missing_fields"), name))
 			continue
 		}
 		interval := def.Interval
@@ -628,9 +615,9 @@ func (p *Page) processPasteImportYAML() {
 	}
 
 	if len(batch) == 0 {
-		msg := "[red]没有有效的规则提供者可导入[white]"
+		msg := i18n.T("rp.no_providers_found")
 		if len(errs) > 0 {
-			msg += fmt.Sprintf(" | %d 个跳过", len(errs))
+			msg += fmt.Sprintf(i18n.T("rp.skip_count"), len(errs))
 		}
 		p.showStatus(msg)
 		return
@@ -639,19 +626,19 @@ func (p *Page) processPasteImportYAML() {
 	cp, err := config.BatchAddRuleProvidersToConfig(batch)
 	if err != nil {
 		log.Printf("[ruleproviders] batch import failed: %v", err)
-		p.showStatus(fmt.Sprintf("[red]批量导入失败: %v[white]", err))
+		p.showStatus(fmt.Sprintf(i18n.T("rp.import_fail"), err))
 		return
 	}
 
 	if err := api.Client.ReloadConfig(cp); err != nil {
 		log.Printf("[ruleproviders] hot-reload failed: %v", err)
-		p.showStatus(fmt.Sprintf("[red]配置重载失败: %v[white]", err))
+		p.showStatus(fmt.Sprintf(i18n.T("rp.reload_fail"), err))
 		return
 	}
 
-	msg := fmt.Sprintf("[green]成功导入 %d 个规则提供者[white]", len(batch))
+	msg := fmt.Sprintf(i18n.T("rp.import_ok_count"), len(batch))
 	if len(errs) > 0 {
-		msg += fmt.Sprintf(" | [red]%d 个跳过[white]", len(errs))
+		msg += fmt.Sprintf(i18n.T("rp.skip_count"), len(errs))
 		log.Printf("[ruleproviders] paste import skipped: %v", errs)
 	}
 

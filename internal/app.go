@@ -3,6 +3,7 @@ package app
 import (
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/subscription"
 	"mihomoTui/internal/ui"
 	"mihomoTui/internal/ui/components"
@@ -61,6 +62,9 @@ func (a *App) Initialize() error {
 
 	// Initialize global theme (border colors, etc.)
 	ui.InitTheme()
+
+	// Initialize language from config
+	i18n.SetLanguage(i18n.Language(a.configManager.GetLanguage()))
 
 	// Initialize API client
 	cfg := a.configManager.GetAPI()
@@ -220,6 +224,8 @@ func (a *App) switchPage(index int) {
 
 			// Activate new page if it's activatable
 			a.activatePage(pageName)
+
+
 		}
 
 		// Switch focus to content when switching pages

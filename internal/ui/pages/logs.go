@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"mihomoTui/internal/api"
+	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
 
@@ -35,20 +36,19 @@ type LogsPage struct {
 	clearBtn      *tview.Button
 }
 
-var levels = []string{"All", "Error", "Warn", "Info", "Debug"}
+// levelMapping associates display text with API filter value
+type levelOption struct {
+	display string
+	api     string
+}
 
-func levelToAPI(display string) string {
-	switch display {
-	case "Error":
-		return "error"
-	case "Warn":
-		return "warning"
-	case "Info":
-		return "info"
-	case "Debug":
-		return "debug"
-	default:
-		return ""
+func logLevelOptions() []levelOption {
+	return []levelOption{
+		{i18n.T("log.level_all"), ""},
+		{i18n.T("log.level_error"), "error"},
+		{i18n.T("log.level_warn"), "warning"},
+		{i18n.T("log.level_info"), "info"},
+		{i18n.T("log.level_debug"), "debug"},
 	}
 }
 
@@ -84,16 +84,24 @@ func (p *LogsPage) setupUI() {
 		}()
 	})
 
+	options := logLevelOptions()
+	displayOpts := make([]string, len(options))
+	for i, opt := range options {
+		displayOpts[i] = opt.display
+	}
+
 	// Level dropdown
 	p.levelDropdown = tview.NewDropDown().
-		SetOptions(levels, func(text string, index int) {
+		SetOptions(displayOpts, func(text string, index int) {
 			p.mu.Lock()
-			p.levelFilter = levelToAPI(text)
+			if index >= 0 && index < len(options) {
+				p.levelFilter = options[index].api
+			}
 			p.mu.Unlock()
 			p.onLevelChanged()
 		})
 	p.levelDropdown.SetCurrentOption(0)
-	p.levelDropdown.SetLabel("Level: ")
+	p.levelDropdown.SetLabel(i18n.T("log.level_label"))
 	p.levelDropdown.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.levelDropdown.SetListStyles(
 		tcell.StyleDefault.Background(tcell.ColorDarkGray).Foreground(tcell.ColorWhite),
@@ -102,7 +110,7 @@ func (p *LogsPage) setupUI() {
 
 	// Search input
 	p.searchInput = tview.NewInputField().
-		SetLabel("Search: ").
+		SetLabel(i18n.T("log.search_label")).
 		SetFieldWidth(20)
 	p.searchInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.searchInput.SetChangedFunc(func(text string) {
@@ -113,7 +121,7 @@ func (p *LogsPage) setupUI() {
 	})
 
 	// Pause/Resume button
-	p.pauseBtn = tview.NewButton("[Pause]")
+	p.pauseBtn = tview.NewButton(i18n.T("log.pause"))
 	p.pauseBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	p.pauseBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	p.pauseBtn.SetSelectedFunc(func() {
@@ -121,7 +129,7 @@ func (p *LogsPage) setupUI() {
 	})
 
 	// Clear button
-	p.clearBtn = tview.NewButton("Clear")
+	p.clearBtn = tview.NewButton(i18n.T("log.clear"))
 	p.clearBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	p.clearBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	p.clearBtn.SetSelectedFunc(func() {
@@ -142,7 +150,7 @@ func (p *LogsPage) setupUI() {
 	p.AddItem(p.textView, 0, 1, true)
 
 	p.SetBorder(true)
-	p.SetTitle(" 实时日志 ")
+	p.SetTitle(fmt.Sprintf(" %s ", i18n.T("log.title")))
 }
 
 func (p *LogsPage) onLevelChanged() {
@@ -160,7 +168,7 @@ func (p *LogsPage) onLevelChanged() {
 		p.mu.Lock()
 		p.isPaused = true
 		p.mu.Unlock()
-		p.pauseBtn.SetLabel("[Resume]")
+		p.pauseBtn.SetLabel(i18n.T("log.resume"))
 	} else {
 		p.startLogStream()
 	}
@@ -177,13 +185,13 @@ func (p *LogsPage) togglePause() {
 			p.cancel()
 		}
 		p.ctx, p.cancel = context.WithCancel(context.Background())
-		p.pauseBtn.SetLabel("[Pause]")
+		p.pauseBtn.SetLabel(i18n.T("log.pause"))
 		p.startLogStream()
 	} else {
 		if p.cancel != nil {
 			p.cancel()
 		}
-		p.pauseBtn.SetLabel("[Resume]")
+		p.pauseBtn.SetLabel(i18n.T("log.resume"))
 	}
 }
 
@@ -208,7 +216,7 @@ func (p *LogsPage) startLogStream() {
 				err = api.StreamClient.StreamLogsWithLevel(ctx, level, p.onLogReceived)
 			}
 			if err != nil && err != context.Canceled {
-				p.addLog(fmt.Sprintf("[red]连接错误: %v[white]", err))
+				p.addLog(fmt.Sprintf(i18n.T("log.conn_err"), err))
 				time.Sleep(5 * time.Second)
 			}
 
@@ -332,7 +340,7 @@ func (p *LogsPage) Activate() {
 
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 
-	p.addLog("[green]日志流已激活，开始接收实时日志...[white]")
+	p.addLog(i18n.T("log.stream_active"))
 
 	if !wasPaused {
 		p.startLogStream()

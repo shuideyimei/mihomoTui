@@ -1,95 +1,95 @@
-# 快速开始
+# Quick Start
 
-## 前置条件
+## Prerequisites
 
-- **Go 1.24.1** 或更高版本
-- 支持 **256 色** 和 **鼠标** 的终端（如 GNOME Terminal、iTerm2、Windows Terminal 等）
-- 正在运行的 [Mihomo](https://github.com/MetaCubeX/mihomo) 实例（已启用 `external-controller`）
+- **Go 1.24.1** or higher
+- A terminal with **256-color** and **mouse support** (GNOME Terminal, iTerm2, Windows Terminal, etc.)
+- A running [Mihomo](https://github.com/MetaCubeX/mihomo) instance with `external-controller` enabled
 
-### 验证你的终端
+### Verify Your Terminal
 
 ```bash
-# 检查终端颜色数（应输出 ≥ 256）
+# Check terminal color count (should be ≥ 256)
 echo $TERM
 tput colors
 
-# 确认终端支持鼠标事件（现代终端默认支持）
+# Mouse events are supported by most modern terminals by default
 ```
 
-## 安装
+## Installation
 
-### 1. 克隆仓库
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/shuideyimei/mihomoTui.git
 cd mihomoTui
 ```
 
-### 2. 安装依赖
+### 2. Install Dependencies
 
 ```bash
 go mod tidy
 ```
 
-### 3. 构建并运行
+### 3. Build and Run
 
 ```bash
-# 直接运行（开发模式）
+# Run directly (development mode)
 go run main.go
 
-# 或构建为二进制
+# Or build a binary
 go build -o mihomoTui .
 ./mihomoTui
 ```
 
-## 首次使用
+## First-Time Setup
 
-### 步骤 1：启动应用
+### Step 1: Launch the Application
 
 ```bash
 go run main.go
 ```
 
-你应该会看到类似下面的界面（导航栏在顶部，页面在中间，状态栏在底部）：
+You should see an interface similar to this (navigation bar at top, page content in the middle, status bar at bottom):
 
 ```
-┌─ mihomoTui v0.0-Alpha ────────────────────────── 状态: 已连接 ─┐
-│ [Dashboard] [Proxies] [Connections] [Config] [Logs] ...        │
-│ ┌─────────────────────────────────────────────────────────────┐ │
-│ │                     欢迎使用 mihomoTui                        │ │
-│ │             请先配置 API 地址和密钥                           │ │
-│ └─────────────────────────────────────────────────────────────┘ │
-│ 模式: Rule   ↑ 0B/s  ↓ 0B/s  内存: 0MB  连接: 0              │
-└─────────────────────────────────────────────────────────────────┘
+┌─ mihomoTui v0.0-Alpha ────────────────────────── Status: Connected ─┐
+│ [Dashboard] [Proxies] [Connections] [Config] [Logs] ...             │
+│ ┌──────────────────────────────────────────────────────────────────┐ │
+│ │                    Welcome to mihomoTui                          │ │
+│ │              Please configure API URL and Secret first           │ │
+│ └──────────────────────────────────────────────────────────────────┘ │
+│ Mode: Rule   ↑ 0B/s  ↓ 0B/s  Memory: 0MB  Connections: 0          │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-### 步骤 2：配置 API 连接
+### Step 2: Configure API Connection
 
-1. 按 `F4` 或点击导航栏 **Config** 进入配置页面
-2. 输入你的 Mihomo API 地址（默认：`http://127.0.0.1:9090`）
-3. 输入 API Secret（如果在 Mihomo 中配置了 `secret` 字段）
-4. 点击 **保存**（或按 `Enter`）
-5. 配置自动写入 `~/.config/mihomoTui/config.json`
-6. **重启应用** 使设置生效
+1. Press `F4` or click **Config** on the navigation bar
+2. Enter your Mihomo API address (default: `http://127.0.0.1:9090`)
+3. Enter your API Secret (if configured in your Mihomo `config.yaml`)
+4. Click **Save** (or press `Enter`)
+5. Config is automatically written to `~/.config/mihomoTui/config.json`
+6. **Restart the application** for the settings to take effect
 
-### 步骤 3：验证连接
+### Step 3: Verify Connection
 
-重启后，底部状态栏应显示：
-- 当前代理模式（Rule / Global / Direct）
-- 实时流量（上行/下行速度）
-- 内存使用情况
-- 活跃连接数
+After restarting, the status bar at the bottom should display:
+- Current proxy mode (Rule / Global / Direct)
+- Real-time traffic (upload/download speed)
+- Memory usage
+- Active connection count
 
-如果状态栏显示「未连接」，请检查：
-- Mihomo 是否正在运行
-- API 地址和 Secret 是否正确
-- 端口是否可访问
+If the status bar shows "Disconnected", check:
+- Whether Mihomo is running
+- Whether the API URL and Secret are correct
+- Whether the port is accessible
 
-## 配置详解
+## Configuration Details
 
-### 应用配置
+### App Configuration
 
-配置文件位置：`~/.config/mihomoTui/config.json`
+Config file location: `~/.config/mihomoTui/config.json`
 
 ```json
 {
@@ -100,62 +100,62 @@ go run main.go
 }
 ```
 
-| 字段 | 说明 |
-|------|------|
-| `base_url` | Mihomo API 地址，格式 `http://ip:port` |
-| `secret` | API 密钥，与 `config.yaml` 中 `secret` 字段一致 |
+| Field | Description |
+|-------|-------------|
+| `base_url` | Mihomo API address, format `http://ip:port` |
+| `secret` | API secret, must match the `secret` field in `config.yaml` |
 
-### Mihomo 配置要求
+### Mihomo Configuration Requirements
 
-你的 Mihomo `config.yaml` 必须启用 `external-controller`：
+Your Mihomo `config.yaml` must have `external-controller` enabled:
 
 ```yaml
-# config.yaml 示例
+# config.yaml example
 port: 7890
 socks-port: 7891
-external-controller: 0.0.0.0:9090  # 必须启用
-secret: ""                          # 可选，建议设置
+external-controller: 0.0.0.0:9090  # required
+secret: ""                          # optional, recommended
 ```
 
-### 定位 Mihomo 配置文件
+### Finding the Mihomo Config File
 
-TUI 通过以下方式寻找 Mihomo 的 `config.yaml`：
+The TUI locates your Mihomo `config.yaml` by:
 
-1. 扫描 `/proc` 查找运行中的 mihomo 进程及其 `-d` / `--directory` 参数
-2. 回退到常见位置：
+1. Scanning `/proc` for running mihomo processes and their `-d` / `--directory` flags
+2. Falling back to common locations:
    - `/etc/mihomo/config.yaml`
    - `~/.config/mihomo/config.yaml`
 
-> ⚠️ 对 Mihomo 配置的写操作（代理组、规则、提供者）通常需要 `sudo` 权限，因为配置文件归 root 所有。
+> ⚠️ Write operations on the Mihomo config (proxy groups, rules, providers) typically require `sudo` access, as the config file is usually owned by root.
 
-## 页面导航
+## Page Navigation
 
-| 键 | 跳转到 |
-|----|--------|
-| `F1` / `Ctrl+1` / `Alt+D` | 仪表盘 |
-| `F2` / `Ctrl+2` / `Alt+P` | 代理 |
-| `F3` / `Ctrl+3` / `Alt+R` | 连接 |
-| `F4` / `Ctrl+4` / `Alt+C` | 配置 |
-| `F5` / `Ctrl+5` / `Alt+L` | 日志 |
-| `F6` / `Ctrl+6` / `Alt+S` | 订阅 |
-| `F7` / `Ctrl+7` / `Alt+G` | 代理组 |
-| `F8` / `Ctrl+8` / `Alt+U` | 规则 |
-| `F9` / `Ctrl+9` / `Alt+T` | 规则提供者 |
-| `F10` / `Ctrl+0` / `Alt+K` | 设置 |
-| `F11` / `Alt+M` | 配置管理 |
-| `?` | 显示/隐藏快捷键帮助 |
+| Key | Navigate To |
+|-----|-------------|
+| `F1` / `Ctrl+1` / `Alt+D` | Dashboard |
+| `F2` / `Ctrl+2` / `Alt+P` | Proxies |
+| `F3` / `Ctrl+3` / `Alt+R` | Connections |
+| `F4` / `Ctrl+4` / `Alt+C` | Config |
+| `F5` / `Ctrl+5` / `Alt+L` | Logs |
+| `F6` / `Ctrl+6` / `Alt+S` | Subscriptions |
+| `F7` / `Ctrl+7` / `Alt+G` | Proxy Groups |
+| `F8` / `Ctrl+8` / `Alt+U` | Rules |
+| `F9` / `Ctrl+9` / `Alt+T` | Rule Providers |
+| `F10` / `Ctrl+0` / `Alt+K` | Settings |
+| `F11` / `Alt+M` | Config Manager |
+| `?` | Show/hide keyboard shortcuts help |
 
-也支持鼠标点击导航栏切换页面。
+Mouse click on navigation bar items is also supported.
 
-## 从源码构建
+## Building from Source
 
-### 构建当前平台
+### Build for Current Platform
 
 ```bash
 go build -o mihomoTui .
 ```
 
-### 交叉编译
+### Cross-Compile
 
 ```bash
 # Linux amd64
@@ -171,44 +171,44 @@ GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o mihomoTui-darwin-amd64 .
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o mihomoTui-windows-amd64.exe .
 ```
 
-### 运行测试
+### Run Tests
 
 ```bash
-# 运行所有内部包测试
+# Run all internal package tests
 go test ./internal/...
 
-# 运行特定包测试
+# Run tests for a specific package
 go test ./internal/ui/pages/...
 go test ./internal/api/...
 ```
 
-## 疑难解答
+## Troubleshooting
 
-### 启动后看不到界面 / 乱码
+### No Display / Garbled Characters After Launch
 
-确保你的终端：
-- 支持 UTF-8 编码
-- 设置 `TERM=xterm-256color` 或类似值
-- 已安装等宽字体
+Make sure your terminal:
+- Supports UTF-8 encoding
+- Has `TERM=xterm-256color` or similar set
+- Uses a monospace font
 
-### 状态栏显示「未连接」
+### Status Bar Shows "Disconnected"
 
-1. 确认 Mihomo 正在运行：`ps aux | grep mihomo`
-2. 检查 API 是否可访问：`curl http://127.0.0.1:9090/version`
-3. 验证配置页面中的地址和密钥是否正确
+1. Verify Mihomo is running: `ps aux | grep mihomo`
+2. Check API accessibility: `curl http://127.0.0.1:9090/version`
+3. Verify the address and secret in the Config page
 
-### 无法保存配置
+### Cannot Save Configuration
 
-配置目录 `~/.config/mihomoTui/` 会自动创建。如果保存失败，检查：
-- 目录权限是否正确
-- 磁盘空间是否充足
+The config directory `~/.config/mihomoTui/` is created automatically. If saving fails, check:
+- Directory permissions
+- Disk space availability
 
-### 修改 Mihomo 配置需要 sudo
+### Modifying Mihomo Config Requires sudo
 
 ```bash
-# 临时提权运行
+# Run with elevated privileges temporarily
 sudo ./mihomoTui
 
-# 或修改配置文件权限（不推荐）
+# Or change config file ownership (not recommended)
 sudo chown $USER /etc/mihomo/config.yaml
 ```

@@ -142,10 +142,13 @@ func (a *App) setupPages() {
 
 	// Proxies page
 	proxiesPage := pages.NewProxies()
+	// ProxiesPage sets its own InputCapture internally via initializeNavigation()
+	// which already includes Tab navigation and shortcuts
 	a.pages.AddPage("proxies", proxiesPage, true, false)
 
 	// Connections page
 	connectionsPage := pages.NewConnections()
+	connectionsPage.SetInputCapture(connectionsPage.GetInputCapture())
 	a.pages.AddPage("connections", connectionsPage, true, false)
 
 	// Config page
@@ -173,6 +176,7 @@ func (a *App) setupPages() {
 
 	// Settings page
 	settingsPage := pages.NewSettings(a.configManager, a.appName, a.appVersion)
+	settingsPage.SetInputCapture(settingsPage.GetInputCapture())
 	a.pages.AddPage("settings", settingsPage, true, false)
 
 	configMgrPage := pages.NewConfigManager()

@@ -4,20 +4,26 @@ import "github.com/gdamore/tcell/v2"
 
 // handleGlobalKeys handles global keyboard shortcuts
 func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
-	if event.Rune() == '?' {
-		if a.showingHelp {
-			a.rootPages.HidePage("help")
-			a.showingHelp = false
-		} else {
-			a.rootPages.ShowPage("help")
-			a.showingHelp = true
-		}
+	// Check if the event is a rune event (printable character)
+	// ? can come as Rune '?' directly, or as '/' with Shift modifier on some terminals
+	isQuestionMark := event.Rune() == '?'
+	if event.Key() == tcell.KeyRune && event.Rune() == '/' && event.Modifiers()&tcell.ModShift != 0 {
+		isQuestionMark = true
+	}
+
+	if isQuestionMark {
+		a.toggleHelp()
+		return nil
+	}
+
+	// F12 as alternative help shortcut
+	if event.Key() == tcell.KeyF12 {
+		a.toggleHelp()
 		return nil
 	}
 
 	if event.Key() == tcell.KeyEscape && a.showingHelp {
-		a.rootPages.HidePage("help")
-		a.showingHelp = false
+		a.hideHelp()
 		return nil
 	}
 
@@ -146,4 +152,30 @@ func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 	}
 
 	return event
+}
+
+// toggleHelp toggles the help overlay visibility
+func (a *App) toggleHelp() {
+	if a.showingHelp {
+		a.hideHelp()
+	} else {
+		a.showHelp()
+	}
+}
+
+// showHelp displays the help overlay
+func (a *App) showHelp() {
+	a.rootPages.ShowPage("help")
+	a.showingHelp = true
+}
+
+// hideHelp hides the help overlay and restores focus
+func (a *App) hideHelp() {
+	a.rootPages.HidePage("help")
+	a.showingHelp = false
+	// Pages.HidePage restores focus to the main page automatically.
+	// Ensure our internal state reflects the correct focus target.
+	if !a.focusOnNav {
+		a.setFocus(false)
+	}
 }

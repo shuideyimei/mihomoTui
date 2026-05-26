@@ -147,7 +147,7 @@ func (s *StatusBar) updateContent() {
 		downSpeed = "- B/s"
 	}
 
-	content = fmt.Sprintf("%s%s[white] | ↑ [green]%s[white]  ↓ [green]%s[white]  [gray]?帮助[-]",
+	content = fmt.Sprintf("%s%s[white] | ↑ [green]%s[white]  ↓ [green]%s[white]  [gray]?/F12 帮助[-]",
 		modeTag, mode, upSpeed, downSpeed)
 
 	s.SetText(content)

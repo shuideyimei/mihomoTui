@@ -18,20 +18,24 @@ const helpText = `[yellow::b]=== 快捷键帮助 ===[-::-]
   [white]F8 / Ctrl+8 / Alt+U[-]  规则
   [white]F9 / Ctrl+9 / Alt+T[-]  规则提供者
   [white]F10 / Ctrl+0 / Alt+K[-] 设置
+  [white]F11 / Alt+M[-]           配置管理
 
 [green::b]全局操作:[-::-]
-  [white]Esc[-]       返回侧边栏
+  [white]Esc[-]       返回侧边栏 / 关闭帮助
   [white]Tab[-]       切换焦点
   [white]Ctrl+R[-]    刷新当前页面
   [white]Ctrl+C/Q[-]  退出程序
-  [white]?[-]         显示/隐藏帮助
+  [white]? / F12[-]   显示/隐藏帮助
 
 [green::b]页面内操作:[-::-]
   [white]代理页:[-] 空格=延迟测试, R=单节点测速
   [white]连接页:[-] D/Del=关闭连接, F5=刷新, T=自动刷新
   [white]规则页:[-] /=搜索, A=添加, D=删除
 
-[yellow]按 ? 或 Esc 关闭此面板[-]`
+  [gray]提示: 页面内快捷键只在对应组件获得焦点时有效，
+  可使用 Tab 切换焦点到目标组件。[-]
+
+[yellow]按 ?、F12 或 Esc 关闭此面板[-]`
 
 // NewHelpPage creates a help overlay panel showing all keyboard shortcuts
 func NewHelpPage() tview.Primitive {

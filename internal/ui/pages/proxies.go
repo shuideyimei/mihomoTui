@@ -1045,11 +1045,17 @@ func (p *ProxiesPage) initializeNavigation() {
 		case tcell.KeyBacktab:
 			p.switchToPrevComponent()
 			return nil
+		case tcell.KeyCtrlR:
+			p.Refresh()
+			return nil
 		}
 
 		switch event.Rune() {
 		case 'h', 'H':
 			p.showInfo("使用 TAB 切换组件，使用方向键移动选择")
+			return nil
+		case 'r', 'R':
+			p.testSelectedNodeDelay()
 			return nil
 		}
 		return event

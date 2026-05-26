@@ -24,6 +24,8 @@ English | [简体中文](README_ZH.md)
 - ⌨️ **Keyboard Shortcuts** — F-keys, Ctrl+number, Alt+letter for quick navigation
 - 📎 **Smart Config Merging** — Merge subscription configs with your local config (proxies, groups, rules) with conflict resolution
 
+> 👉 [**QUICKSTART.md**](QUICKSTART.md) — Installation, configuration, and first-run guide
+
 ## Project Status
 
 **Current Version**: `v0.0-Alpha` — In Development

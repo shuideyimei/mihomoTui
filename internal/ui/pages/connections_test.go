@@ -21,8 +21,9 @@ func TestNewConnections_NonNil(t *testing.T) {
 	if c == nil {
 		t.Fatal("NewConnections() returned nil")
 	}
-	if c.ConnectionsPage == nil {
-		t.Fatal("NewConnections().ConnectionsPage is nil")
+	// NewConnections now returns *ConnectionsPage directly
+	if _, ok := interface{}(c).(ActivatablePage); !ok {
+		t.Fatal("NewConnections() does not implement ActivatablePage")
 	}
 }
 

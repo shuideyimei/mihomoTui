@@ -12,82 +12,38 @@ type ActivatablePage interface {
 }
 
 // NewDashboard creates a new dashboard page
-func NewDashboard() *Dashboard {
-	return &Dashboard{
-		DashboardPage: NewDashboardPage(),
-	}
+func NewDashboard() *DashboardPage {
+	return NewDashboardPage()
 }
 
 // NewProxies creates a new proxies page
-func NewProxies() *Proxies {
-	return &Proxies{
-		ProxiesPage: NewProxiesPage(),
-	}
+func NewProxies() *ProxiesPage {
+	return NewProxiesPage()
 }
 
 // NewConnections creates a new connections page
-func NewConnections() *Connections {
-	return &Connections{
-		ConnectionsPage: NewConnectionsPage(),
-	}
+func NewConnections() *ConnectionsPage {
+	return NewConnectionsPage()
 }
 
 // NewConfig creates a new config page
-func NewConfig(configManager *config.Manager) *Config {
-	return &Config{
-		ConfigPage: NewConfigPage(configManager),
-	}
+func NewConfig(configManager *config.Manager) *ConfigPage {
+	return NewConfigPage(configManager)
 }
 
 // NewLogs creates a new logs page
-func NewLogs() *Logs {
-	return &Logs{
-		LogsPage: NewLogsPage(),
-	}
-}
-
-// ProxyGroups wraps proxygroups.Page to implement ActivatablePage
-type ProxyGroups struct {
-	*proxygroupspage.Page
+func NewLogs() *LogsPage {
+	return NewLogsPage()
 }
 
 // NewProxyGroups creates a new proxy groups management page
-func NewProxyGroups() *ProxyGroups {
-	return &ProxyGroups{
-		Page: proxygroupspage.NewPage(),
-	}
-}
-
-// Activate activates the proxy groups page
-func (p *ProxyGroups) Activate() {
-	p.Page.Activate()
-}
-
-// Deactivate deactivates the proxy groups page
-func (p *ProxyGroups) Deactivate() {
-	p.Page.Deactivate()
-}
-
-// Rules wraps RulesPage to implement ActivatablePage
-type Rules struct {
-	*RulesPage
+func NewProxyGroups() *proxygroupspage.Page {
+	return proxygroupspage.NewPage()
 }
 
 // NewRules creates a new rules management page
-func NewRules() *Rules {
-	return &Rules{
-		RulesPage: NewRulesPage(),
-	}
-}
-
-// Activate activates the rules page
-func (p *Rules) Activate() {
-	p.RulesPage.Activate()
-}
-
-// Deactivate deactivates the rules page
-func (p *Rules) Deactivate() {
-	p.RulesPage.Deactivate()
+func NewRules() *RulesPage {
+	return NewRulesPage()
 }
 
 // NewSettings creates a new settings page

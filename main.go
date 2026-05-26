@@ -3,10 +3,15 @@ package main
 import (
 	"log"
 	app "mihomoTui/internal"
+	"mihomoTui/internal/api"
 	"mihomoTui/internal/utils"
 )
 
 func main() {
+	// Initialize application logging
+	shutdownLog := api.InitLogging()
+	defer shutdownLog()
+
 	// Create new application with build info
 	app := app.NewApp(
 		utils.GetEnvWithDefault("APP_NAME", "mihomoTui"),

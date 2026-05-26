@@ -35,8 +35,9 @@ func TestNewLogs_NonNil(t *testing.T) {
 	if l == nil {
 		t.Fatal("NewLogs() returned nil")
 	}
-	if l.LogsPage == nil {
-		t.Fatal("NewLogs().LogsPage is nil")
+	// NewLogs now returns *LogsPage directly
+	if _, ok := interface{}(l).(ActivatablePage); !ok {
+		t.Fatal("NewLogs() does not implement ActivatablePage")
 	}
 }
 
@@ -147,9 +148,9 @@ func TestLogs_TogglePause(t *testing.T) {
 		page.togglePause()
 	}()
 
-	page.LogsPage.mu.Lock()
-	paused := page.LogsPage.isPaused
-	page.LogsPage.mu.Unlock()
+	page.mu.Lock()
+	paused := page.isPaused
+	page.mu.Unlock()
 	if !paused {
 		t.Error("expected isPaused=true after togglePause")
 	}
@@ -164,9 +165,9 @@ func TestLogs_TogglePause(t *testing.T) {
 		page.togglePause()
 	}()
 
-	page.LogsPage.mu.Lock()
-	paused = page.LogsPage.isPaused
-	page.LogsPage.mu.Unlock()
+	page.mu.Lock()
+	paused = page.isPaused
+	page.mu.Unlock()
 	if paused {
 		t.Error("expected isPaused=false after second togglePause")
 	}
@@ -175,5 +176,5 @@ func TestLogs_TogglePause(t *testing.T) {
 	page.Deactivate()
 }
 
-// Ensure Logs satisfies the ActivatablePage interface at compile time.
-var _ ActivatablePage = (*Logs)(nil)
+// Ensure LogsPage satisfies the ActivatablePage interface at compile time.
+var _ ActivatablePage = (*LogsPage)(nil)

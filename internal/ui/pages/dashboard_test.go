@@ -72,8 +72,9 @@ func TestNewDashboard_NonNil(t *testing.T) {
 	if dash == nil {
 		t.Fatal("NewDashboard() returned nil")
 	}
-	if dash.DashboardPage == nil {
-		t.Fatal("NewDashboard().DashboardPage is nil")
+	// NewDashboard now returns *DashboardPage directly
+	if _, ok := interface{}(dash).(ActivatablePage); !ok {
+		t.Fatal("NewDashboard() does not implement ActivatablePage")
 	}
 }
 
@@ -141,7 +142,7 @@ func TestDashboard_BasicLayout(t *testing.T) {
 		t.Error("operationStatus is nil — expected *tview.TextView")
 	}
 	if dash.buttonNav == nil {
-		t.Error("buttonNav is nil — expected *components.ButtonNavigator")
+		t.Error("buttonNav is nil — expected *components.FocusNavigator")
 	}
 	if dash.Flex == nil {
 		t.Error("Flex is nil — expected *tview.Flex")

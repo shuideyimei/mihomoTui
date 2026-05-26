@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 
@@ -20,8 +19,9 @@ import (
 )
 
 type ConfigManager struct {
-	*tview.Pages
+	*tview.Flex
 
+	pages         *tview.Pages
 	mu            sync.Mutex
 	configList    *tview.List
 	editArea      *tview.TextArea
@@ -35,7 +35,8 @@ type ConfigManager struct {
 
 func newConfigManagerPage() *ConfigManager {
 	cm := &ConfigManager{
-		Pages:         tview.NewPages(),
+		Flex:          tview.NewFlex(),
+		pages:         tview.NewPages(),
 		selectedIdx:   -1,
 		currentConfig: config.FindCurrentConfigPath(),
 	}
@@ -52,9 +53,18 @@ func (cm *ConfigManager) setupUI() {
 	cm.configList = tview.NewList()
 	cm.configList.SetBorder(true)
 	cm.configList.SetTitle(" 配置文件列表 ")
+	cm.configList.SetMainTextColor(tcell.ColorWhite)
+	cm.configList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
+	cm.configList.SetSelectedTextColor(tcell.ColorBlack)
 	cm.configList.SetInputCapture(cm.handleConfigListInput)
 	cm.configList.SetChangedFunc(func(idx int, _ string, _ string, _ rune) {
 		cm.selectedIdx = idx
+	})
+	cm.configList.SetFocusFunc(func() {
+		cm.configList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
+	})
+	cm.configList.SetBlurFunc(func() {
+		cm.configList.SetSelectedBackgroundColor(ui.ThemeSelBgBlur)
 	})
 
 	cm.editArea = tview.NewTextArea()
@@ -69,11 +79,11 @@ func (cm *ConfigManager) setupUI() {
 
 	// Build edit dialog page (reusable, shown/hidden as a page overlay)
 	editSaveBtn := tview.NewButton("[white::b] 保存(Ctrl+S) ")
-	editSaveBtn.SetBackgroundColor(tcell.ColorGrey)
-	editSaveBtn.SetLabelColor(tcell.ColorWhite)
+	editSaveBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	editSaveBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	editCancelBtn := tview.NewButton("[white::b] 取消(Esc) ")
-	editCancelBtn.SetBackgroundColor(tcell.ColorGrey)
-	editCancelBtn.SetLabelColor(tcell.ColorWhite)
+	editCancelBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	editCancelBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 
 	editBtnFlex := tview.NewFlex()
 	editBtnFlex.AddItem(nil, 0, 1, false)
@@ -108,15 +118,14 @@ func (cm *ConfigManager) setupUI() {
 	cm.editFlex = editFlex
 
 	editBtn := tview.NewButton("[white::b] 预览 ")
-	editBtn.SetBackgroundColor(tcell.ColorGrey)
-	editBtn.SetLabelColor(tcell.ColorWhite)
+	editBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	editBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	editBtn.SetSelectedFunc(func() { cm.showEditDialog() })
 
 	deleteBtn := tview.NewButton("[white::b] 删除 ")
-	deleteBtn.SetBackgroundColor(tcell.ColorGrey)
-	deleteBtn.SetLabelColor(tcell.ColorWhite)
-	deleteBtn.SetLabelColorActivated(tcell.ColorBlack)
-	deleteBtn.SetBackgroundColorActivated(tcell.ColorWhite)
+	deleteBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	deleteBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	deleteBtn.SetLabelColorActivated(tcell.ColorWhite)
 	deleteBtn.SetSelectedFunc(func() { cm.showDeleteConfirm() })
 
 	btnFlex := tview.NewFlex()
@@ -136,7 +145,8 @@ func (cm *ConfigManager) setupUI() {
 	mainFlex.AddItem(btnFlex, 1, 0, false)
 	mainFlex.AddItem(helpText, 1, 0, false)
 
-	cm.AddPage("main", mainFlex, true, true)
+	cm.pages.AddPage("main", mainFlex, true, true)
+	cm.AddItem(cm.pages, 0, 1, true)
 }
 
 func (cm *ConfigManager) handleConfigListInput(event *tcell.EventKey) *tcell.EventKey {
@@ -284,7 +294,7 @@ func (cm *ConfigManager) showEditDialog() {
 				return ev
 			})
 			cm.editArea.SetText(content, true)
-			cm.AddPage("edit", cm.editFlex, true, true)
+			cm.pages.AddPage("edit", cm.editFlex, true, true)
 			ui.Updater.SetFocus(cm.editArea)
 		})
 	}()
@@ -296,8 +306,8 @@ func (cm *ConfigManager) closeEditDialog() {
 	}
 	cm.editMode = false
 	cm.editArea.SetText("", true)
-	cm.RemovePage("edit")
-	cm.SwitchToPage("main")
+	cm.pages.RemovePage("edit")
+	cm.pages.SwitchToPage("main")
 	cm.statusText.SetText("[green]已退出编辑模式[-]")
 }
 
@@ -335,6 +345,14 @@ func (cm *ConfigManager) saveEdit(text string) {
 
 	configPath := files[idx]
 
+	if api.Client == nil {
+		ui.Updater.PostUi(func() {
+			cm.statusText.SetText("[red]API 客户端未初始化[-]")
+			cm.closeEditDialog()
+		})
+		return
+	}
+
 	log.Printf("[configmgr] writing config to %s", configPath)
 	saveErr := writeRawConfig(configPath, text)
 	if saveErr != nil {
@@ -368,6 +386,12 @@ func (cm *ConfigManager) saveEdit(text string) {
 }
 
 func writeRawConfig(configPath, text string) error {
+	// Resolve symlinks to prevent sudo cp from following a malicious symlink
+	realPath, err := filepath.EvalSymlinks(configPath)
+	if err != nil {
+		return fmt.Errorf("解析配置文件路径失败: %w", err)
+	}
+
 	// Write to a temp file first, then use sudo cp to handle files
 	// owned by a different user (e.g. mihomo:mihomo at /opt/clashtui/...)
 	tmpFile, err := os.CreateTemp("", "mihomo_config_*.yaml")
@@ -382,9 +406,15 @@ func writeRawConfig(configPath, text string) error {
 		return fmt.Errorf("写入临时文件失败: %w", err)
 	}
 
-	origStat, _ := os.Stat(configPath)
+	// Verify the temp file is still a regular file (prevent TOCTOU swap)
+	tmpStat, err := os.Stat(tmpPath)
+	if err != nil || !tmpStat.Mode().IsRegular() {
+		return fmt.Errorf("临时文件状态异常: %v", err)
+	}
 
-	cmd := exec.Command("sudo", "cp", tmpPath, configPath)
+	origStat, _ := os.Stat(realPath)
+
+	cmd := exec.Command("sudo", "cp", tmpPath, realPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("写入配置文件失败 (需要 sudo 权限): %s", string(output))
 	}
@@ -392,7 +422,7 @@ func writeRawConfig(configPath, text string) error {
 	// Preserve original file ownership
 	if origStat != nil {
 		if st, ok := origStat.Sys().(*syscall.Stat_t); ok {
-			if err := exec.Command("sudo", "chown", fmt.Sprintf("%d:%d", st.Uid, st.Gid), configPath).Run(); err != nil {
+			if err := exec.Command("sudo", "chown", fmt.Sprintf("%d:%d", st.Uid, st.Gid), realPath).Run(); err != nil {
 				return fmt.Errorf("恢复文件所有权失败: %w", err)
 			}
 		}
@@ -400,37 +430,7 @@ func writeRawConfig(configPath, text string) error {
 	return nil
 }
 
-func yamlHighlight(text string) string {
-	lines := strings.Split(text, "\n")
-	var buf strings.Builder
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			buf.WriteByte('\n')
-			continue
-		}
-		if trimmed[0] == '#' {
-			buf.WriteString("[gray::]" + tview.Escape(line) + "[-::-]\n")
-			continue
-		}
-		colonIdx := strings.Index(line, ":")
-		if colonIdx >= 0 {
-			keyPart := line[:colonIdx]
-			valPart := line[colonIdx:]
-			buf.WriteString("[yellow]" + tview.Escape(keyPart) + "[-]" + tview.Escape(valPart) + "\n")
-			continue
-		}
-		dashIdx := strings.Index(line, "- ")
-		if dashIdx >= 0 {
-			beforeDash := line[:dashIdx]
-			afterDash := line[dashIdx+2:]
-			buf.WriteString(tview.Escape(beforeDash) + "[green]-[-] " + tview.Escape(afterDash) + "\n")
-			continue
-		}
-		buf.WriteString(tview.Escape(line) + "\n")
-	}
-	return buf.String()
-}
+
 
 func (cm *ConfigManager) showDeleteConfirm() {
 	cm.mu.Lock()
@@ -458,7 +458,11 @@ func (cm *ConfigManager) showDeleteConfirm() {
 	textView.SetText(warning)
 
 	deleteBtn := tview.NewButton("删除")
+	deleteBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	deleteBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	cancelBtn := tview.NewButton("取消")
+	cancelBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	cancelBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 
 	btnFlex := tview.NewFlex()
 	btnFlex.AddItem(deleteBtn, 0, 1, true)
@@ -493,23 +497,23 @@ func (cm *ConfigManager) showDeleteConfirm() {
 			cm.statusText.SetText(fmt.Sprintf("[green]已删除: %s[-]", tview.Escape(label)))
 			log.Printf("[configmgr] deleted config: %s", path)
 		}
-		cm.SwitchToPage("main")
+		cm.pages.SwitchToPage("main")
 	})
 
 	cancelBtn.SetSelectedFunc(func() {
-		cm.SwitchToPage("main")
+		cm.pages.SwitchToPage("main")
 	})
 
 	dialog.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 		if ev.Key() == tcell.KeyEscape {
-			cm.SwitchToPage("main")
+			cm.pages.SwitchToPage("main")
 			return nil
 		}
 		return ev
 	})
 
-	cm.AddPage("delete", flex, true, true)
-	cm.SwitchToPage("delete")
+	cm.pages.AddPage("delete", flex, true, true)
+	cm.pages.SwitchToPage("delete")
 }
 
 // ensureSafePaths adds the user's config directory to Mihomo's SAFE_PATHS so that

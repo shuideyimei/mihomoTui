@@ -75,25 +75,36 @@ func (p *Page) setupUI() {
 	p.groupForm = tview.NewForm()
 	p.groupForm.SetBorder(true)
 	p.groupForm.SetTitle(" 添加代理组 ")
+	p.groupForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput = tview.NewInputField()
+	p.nameInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput.SetLabel("名称 ")
 	p.nameInput.SetFieldWidth(30)
 	p.typeSelect = tview.NewDropDown()
 	p.typeSelect.SetLabel("类型 ")
+	p.typeSelect.SetFieldBackgroundColor(ui.ThemeInputBg)
+	p.typeSelect.SetListStyles(
+		tcell.StyleDefault.Background(tcell.ColorDarkGray).Foreground(tcell.ColorWhite),
+		tcell.StyleDefault.Background(ui.ThemeHighlightBg).Foreground(tcell.ColorBlack),
+	)
 	for _, t := range config.ValidGroupTypes {
 		p.typeSelect.AddOption(t, nil)
 	}
 	p.typeSelect.SetCurrentOption(0)
 	p.proxiesInput = tview.NewInputField()
+	p.proxiesInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.proxiesInput.SetLabel("代理节点(逗号分隔) ")
 	p.proxiesInput.SetFieldWidth(40)
 	p.useInput = tview.NewInputField()
+	p.useInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.useInput.SetLabel("提供者(逗号分隔) ")
 	p.useInput.SetFieldWidth(40)
 	p.urlInput = tview.NewInputField()
+	p.urlInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.urlInput.SetLabel("测试URL ")
 	p.urlInput.SetFieldWidth(40)
 	p.filterInput = tview.NewInputField()
+	p.filterInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.filterInput.SetLabel("过滤规则 ")
 	p.filterInput.SetFieldWidth(30)
 
@@ -106,6 +117,8 @@ func (p *Page) setupUI() {
 	p.groupForm.AddButton(" 保存 ", p.onSaveClicked)
 	p.groupForm.AddButton(" 取消 ", p.onCancelClicked)
 	p.groupForm.SetButtonsAlign(tview.AlignCenter)
+	p.groupForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	p.groupForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 
 	leftPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	leftPanel.AddItem(p.groupList, 0, 1, true)
@@ -124,6 +137,9 @@ func (p *Page) setupGroupList() {
 	p.groupList = tview.NewList()
 	p.groupList.SetBorder(true)
 	p.groupList.SetTitle(" 代理组 ")
+	p.groupList.SetMainTextColor(tcell.ColorWhite)
+	p.groupList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
+	p.groupList.SetSelectedTextColor(tcell.ColorBlack)
 	p.groupList.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 		switch ev.Key() {
 		case tcell.KeyCtrlD:
@@ -164,13 +180,24 @@ func (p *Page) setupGroupList() {
 }
 
 func (p *Page) setupActionBar() {
+	btnStyle := tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite)
+	btnFocus := tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite)
+
 	refreshBtn := tview.NewButton("[R] 刷新")
+	refreshBtn.SetStyle(btnStyle)
+	refreshBtn.SetActivatedStyle(btnFocus)
 	refreshBtn.SetSelectedFunc(func() { go p.refresh() })
 	addBtn := tview.NewButton("[A] 添加")
+	addBtn.SetStyle(btnStyle)
+	addBtn.SetActivatedStyle(btnFocus)
 	addBtn.SetSelectedFunc(p.showAddForm)
 	editBtn := tview.NewButton("[E] 编辑")
+	editBtn.SetStyle(btnStyle)
+	editBtn.SetActivatedStyle(btnFocus)
 	editBtn.SetSelectedFunc(p.showEditForm)
 	deleteBtn := tview.NewButton("[D] 删除")
+	deleteBtn.SetStyle(btnStyle)
+	deleteBtn.SetActivatedStyle(btnFocus)
 	deleteBtn.SetSelectedFunc(func() { go p.deleteSelected() })
 
 	p.actionBar.AddItem(refreshBtn, 0, 1, false)

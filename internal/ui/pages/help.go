@@ -1,8 +1,8 @@
 package pages
 
 import (
-	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"mihomoTui/internal/ui"
 )
 
 const helpText = `[yellow::b]=== 快捷键帮助 ===[-::-]
@@ -43,7 +43,7 @@ func NewHelpPage() tview.Primitive {
 	textView.SetBorder(true).
 		SetTitle(" 帮助 ").
 		SetTitleAlign(tview.AlignCenter).
-		SetBorderColor(tcell.ColorYellow)
+		SetBorderColor(ui.ThemeBorderColor)
 
 	innerFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).

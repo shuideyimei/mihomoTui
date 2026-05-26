@@ -17,23 +17,6 @@ import (
 	"github.com/rivo/tview"
 )
 
-// Dashboard represents the dashboard page
-type Dashboard struct {
-	*DashboardPage
-}
-
-// Activate activates the dashboard page
-func (d *Dashboard) Activate() {
-	log.Printf("Activating dashboard page")
-	d.DashboardPage.Activate()
-}
-
-// Deactivate deactivates the dashboard page
-func (d *Dashboard) Deactivate() {
-	log.Printf("Deactivating dashboard page")
-	d.DashboardPage.Deactivate()
-}
-
 // DashboardPage represents the main dashboard page
 type DashboardPage struct {
 	*tview.Flex
@@ -48,7 +31,7 @@ type DashboardPage struct {
 	operationStatus *tview.TextView // Status bar for operation results
 
 	// Button navigation
-	buttonNav *components.ButtonNavigator
+	buttonNav *components.FocusNavigator
 
 	// Data
 	connectionsData []models.Connection
@@ -96,8 +79,8 @@ func (d *DashboardPage) setupLayout() {
 
 	// Main layout
 	d.SetDirection(tview.FlexColumn)
-	d.AddItem(leftCol, 0, 1, false)
-	d.AddItem(rightCol, 0, 1, true)
+	d.AddItem(leftCol, 0, 3, false)
+	d.AddItem(rightCol, 0, 2, true)
 
 	d.SetBorder(true)
 	d.SetTitle(" 仪表板 ")
@@ -132,18 +115,19 @@ func (d *DashboardPage) createControlButtons() {
 	buttonsRow := tview.NewFlex().SetDirection(tview.FlexColumn)
 
 	// Create AllowLAN button
-	d.allowLanBtn = tview.NewButton("AllowLAN: ?")
-	d.allowLanBtn.SetStyle(tcell.StyleDefault.Background(tcell.ColorGreen))
+	d.allowLanBtn = tview.NewButton("○ AllowLAN")
+	d.allowLanBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorGray))
+	d.allowLanBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorGray))
 	d.allowLanBtn.SetSelectedFunc(d.toggleAllowLan)
 
 	// Create TUN button
-	d.tunBtn = tview.NewButton("TUN: ?")
-	d.tunBtn.SetStyle(tcell.StyleDefault.Background(tcell.ColorDeepSkyBlue))
+	d.tunBtn = tview.NewButton("○ TUN")
+	d.tunBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorGray))
+	d.tunBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorGray))
 	d.tunBtn.SetSelectedFunc(d.toggleTun)
 
 	// Initialize button navigation
-	d.buttonNav = components.NewButtonNavigator()
-	d.buttonNav.SetButtons([]*tview.Button{d.allowLanBtn, d.tunBtn})
+	d.buttonNav = components.NewFocusNavigator(d.allowLanBtn, d.tunBtn)
 
 	// Add buttons to buttons row
 	buttonsRow.AddItem(d.allowLanBtn, 0, 2, true)
@@ -249,7 +233,7 @@ func (d *DashboardPage) updateConnectionsDisplay() {
 	}
 
 	totalConnections := len(connections)
-	content := fmt.Sprintf("[green]🔗 总连接数[white] %d", totalConnections)
+	content := fmt.Sprintf("总连接数: %d", totalConnections)
 	ui.Updater.PostUi(func() {
 		d.connectionsBox.SetText(content)
 	})
@@ -282,19 +266,12 @@ func (d *DashboardPage) updateControlButtons() {
 	}
 
 	// Compute button states (outside PostUi to avoid blocking UI goroutine)
-	allowLanStatus := "OFF"
-	allowLanBg := tcell.ColorRed
-	if config.AllowLan {
-		allowLanStatus = "ON"
-		allowLanBg = tcell.ColorGreen
-	}
+	on := config.AllowLan
 
-	tunStatus := "OFF"
-	tunColor := tcell.ColorRed
+	tunOn := false
 	if config.Tun != nil {
 		if enable, ok := config.Tun["enable"].(bool); ok && enable {
-			tunStatus = "ON"
-			tunColor = tcell.ColorGreen
+			tunOn = true
 		}
 	}
 
@@ -302,10 +279,26 @@ func (d *DashboardPage) updateControlButtons() {
 	statusContent := d.buildStatusText(config)
 
 	ui.Updater.PostUi(func() {
-		d.allowLanBtn.SetLabel(fmt.Sprintf("AllowLAN: %s", allowLanStatus))
-		d.allowLanBtn.SetBackgroundColor(allowLanBg)
-		d.tunBtn.SetLabel(fmt.Sprintf("TUN: %s", tunStatus))
-		d.tunBtn.SetBackgroundColor(tunColor)
+		// AllowLAN toggle: ● ON / ○ OFF with brightness
+		if on {
+			d.allowLanBtn.SetLabel("● AllowLAN")
+			d.allowLanBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+			d.allowLanBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+		} else {
+			d.allowLanBtn.SetLabel("○ AllowLAN")
+			d.allowLanBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorGray))
+			d.allowLanBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorGray))
+		}
+		// TUN toggle: ● ON / ○ OFF with brightness
+		if tunOn {
+			d.tunBtn.SetLabel("● TUN")
+			d.tunBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+			d.tunBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+		} else {
+			d.tunBtn.SetLabel("○ TUN")
+			d.tunBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorGray))
+			d.tunBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorGray))
+		}
 		d.statusText.SetText(statusContent)
 	})
 }
@@ -318,19 +311,21 @@ func (d *DashboardPage) buildStatusText(config *models.Config) string {
 
 	var contentBuilder strings.Builder
 
-	modeColor := "white"
+	var modeColor string
 	switch config.Mode {
-	case "global":
-		modeColor = "red"
 	case "rule":
-		modeColor = "green"
+		modeColor = ui.ThemeTagModeRule
+	case "global":
+		modeColor = ui.ThemeTagModeGlobal
 	case "direct":
-		modeColor = "yellow"
+		modeColor = ui.ThemeTagModeDirect
+	default:
+		modeColor = "[white]"
 	}
 
-	fmt.Fprintf(&contentBuilder, "🎯 模式 [%s]%s[white]\n", modeColor, config.Mode)
+	fmt.Fprintf(&contentBuilder, "模式 [%s]%s[white]\n", modeColor, config.Mode)
 
-	fmt.Fprintf(&contentBuilder, "[yellow]⚙️ 端口状态[white]")
+	fmt.Fprintf(&contentBuilder, "端口状态")
 	hasPort := false
 	if config.Port != 0 {
 		fmt.Fprintf(&contentBuilder, " | HTTP: %d", config.Port)
@@ -383,7 +378,7 @@ func (d *DashboardPage) updateSystemInfo() {
 		memUsage = "-"
 	}
 	d.mutex.RUnlock()
-	fmt.Fprintf(&content, "[blue]💾 内存使用[white] %s", memUsage)
+	fmt.Fprintf(&content, "内存使用: %s", memUsage)
 
 	ui.Updater.PostUi(func() {
 		d.systemInfoBox.SetText(content.String())

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"mihomoTui/internal/api"
-	"mihomoTui/internal/models"
+	"mihomoTui/internal/ui"
 	"strings"
 
 	"github.com/rivo/tview"
@@ -35,46 +35,49 @@ func NewHeader(appName, version string) *Header {
 
 // setupStyle configures the header appearance
 func (h *Header) setupStyle() {
-	h.SetBorder(true)
 	h.SetBorderPadding(0, 0, 1, 1)
 	h.SetTextAlign(tview.AlignLeft)
 	h.SetDynamicColors(true)
 	h.SetWrap(false)
-	// h.SetBackgroundColor(tcell.ColorCadetBlue)
+	h.SetBackgroundColor(ui.ThemeHeaderBg)
 }
 
 // updateContent updates the header content
 func (h *Header) updateContent() {
-	status := "[red]○[white]"
+	status := ui.ThemeTagDisconnected + "○" + ui.ThemeTagWhite
 	if h.connected {
-		status = "[green]●[white]"
+		status = ui.ThemeTagConnected + "●" + ui.ThemeTagWhite
 	}
 
 	content := strings.Builder{}
 	content.WriteString(fmt.Sprintf("%s %s", h.appName, h.appVersion))
-	content.WriteString(fmt.Sprintf(" | coreVer: %s | Status: %s", h.coreVersion, status))
+	content.WriteString(fmt.Sprintf(" | core: %s | %s", h.coreVersion, status))
 
 	h.SetText(content.String())
 }
 
-// FetchBasicInfo retrieves basic information about the application
+// FetchBasicInfo retrieves basic information about the application.
+// All tview UI updates must run on the UI goroutine via UpdateUi.
 func (h *Header) SetHeaderInfo() {
+	var coreVersion string
 	var connected bool
-	var version *models.Version
 	err := api.Client.HealthCheck()
 	if err != nil {
 		log.Printf("Failed to check health: %v", err)
 	}
 	connected = err == nil
-	version, err = api.Client.GetVersion()
+	version, err := api.Client.GetVersion()
 	if err != nil {
 		log.Printf("Failed to get version: %v", err)
 	}
 	if version != nil {
-		h.coreVersion = version.Version
+		coreVersion = version.Version
 	} else {
-		h.coreVersion = "unknown"
+		coreVersion = "unknown"
 	}
-	h.connected = connected
-	h.updateContent()
+	ui.Updater.UpdateUi(func() {
+		h.connected = connected
+		h.coreVersion = coreVersion
+		h.updateContent()
+	})
 }

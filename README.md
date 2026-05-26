@@ -2,13 +2,9 @@
 
 > Provide a desktop client experience in the terminal — a modern terminal UI for managing the [Mihomo](https://github.com/MetaCubeX/mihomo) proxy.
 
-[![License](https://img.shields.io/github/license/FlySky-z/mihomoTui)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/FlySky-z/mihomoTui?style=social)](https://github.com/FlySky-z/mihomoTui/stargazers)
 [![Go Version](https://img.shields.io/badge/Go-1.24.1-00ADD8)](https://go.dev)
 
 English | [简体中文](README_ZH.md)
-
-![mihomoTui Demo](static/image.png)
 
 ---
 
@@ -26,7 +22,6 @@ English | [简体中文](README_ZH.md)
 - 🔗 **Connection Monitoring** — View active connections, close individual or all connections, auto-refresh
 - 🖱️ **Full Mouse Support** — Click to navigate, switch tabs, toggle buttons
 - ⌨️ **Keyboard Shortcuts** — F-keys, Ctrl+number, Alt+letter for quick navigation
-- 🔄 **Config Hot-Reload** — Modify mihomo config.yaml directly from the TUI with rollback on failure
 - 📎 **Smart Config Merging** — Merge subscription configs with your local config (proxies, groups, rules) with conflict resolution
 
 ## Project Status
@@ -48,8 +43,6 @@ English | [简体中文](README_ZH.md)
 - [x] Rule providers management
 - [x] Subscription import & config merging
 - [x] Proxy group management (CRUD)
-- [x] Config hot-reload with rollback
-- [x] CI/CD — Cross-platform builds (Linux, macOS, Windows)
 - [ ] Check config details
 - [ ] Switch config files
 - [ ] Modify ports from UI
@@ -65,7 +58,6 @@ English | [简体中文](README_ZH.md)
 | Config     | JSON (app) + YAML (mihomo)                      |
 | API        | Mihomo REST API (HTTP)                          |
 | Streaming  | Mihomo SSE/chunked endpoints (traffic, logs, memory) |
-| CI/CD      | GitHub Actions (cross-platform builds, releases)       |
 
 ## Project Structure
 
@@ -77,10 +69,6 @@ mihomoTui/
 ├── .gitignore
 ├── static/
 │   └── image.png                    # Demo screenshot
-│
-├── .github/workflows/
-│   ├── ci-build.yml                 # CI: build check on push to main
-│   └── build-release.yml            # CD: cross-platform release on tag push
 │
 ├── internal/
 │   ├── app.go                       # Application orchestration, page wiring, layout
@@ -102,9 +90,6 @@ mihomoTui/
 │   │   ├── bus.go                   # Pub/sub event bus
 │   │   └── bus_test.go
 │   │
-│   ├── hotreload/
-│   │   └── manager.go               # Config hot-reload with rollback support
-│   │
 │   ├── merge/
 │   │   ├── engine.go                # Smart config merging engine
 │   │   └── engine_test.go
@@ -115,16 +100,12 @@ mihomoTui/
 │   ├── parser/
 │   │   ├── parser.go                # YAML config parser (Clash/Mihomo format)
 │   │   ├── parser_test.go
-│   │   ├── strutil.go               # String utility helpers
 │   │   ├── util.go                  # Parsing utilities
 │   │   └── validate.go              # Validation helpers
 │   │
 │   ├── proxygroup/
 │   │   ├── manager.go               # Proxy group & dependency management
 │   │   └── manager_test.go
-│   │
-│   ├── runtime/
-│   │   └── state.go                 # Runtime state container (bus, cache, managers)
 │   │
 │   ├── subscription/
 │   │   └── manager.go               # Subscription import from URL or local file
@@ -137,17 +118,15 @@ mihomoTui/
 │   │   ├── proxygroup.go            # ProxyGroupDef, ImportResult, ConflictEntry
 │   │   └── subscription.go          # Subscription & UserInfo
 │   │
-│   ├── updater/
-│   │   └── manager.go               # Background update task manager
-│   │
 │   ├── ui/
 │   │   ├── ui.go                    # UI updater singleton (QueueUpdate wrapper)
+│   │   ├── theme.go                 # Theme colors and global style initialization
 │   │   │
 │   │   ├── components/
 │   │   │   ├── header.go            # Top header bar (app name, version, connection status)
-│   │   │   ├── sidebar.go           # Navigation sidebar (9 pages)
+│   │   │   ├── navbar.go            # Horizontal navigation bar (11 pages)
 │   │   │   ├── statusbar.go         # Bottom status bar (mode, traffic, help text)
-│   │   │   └── buttonnav.go         # Button navigation primitives
+│   │   │   └── navigation.go        # Focus navigation primitives
 │   │   │
 │   │   └── pages/
 │   │       ├── pages.go             # Page constructors & ActivatablePage interface
@@ -160,9 +139,7 @@ mihomoTui/
 │   │       ├── settings.go          # Settings page (WIP)
 │   │       ├── proxygroups/         # Proxy groups management: CRUD, type selection
 │   │       ├── ruleproviders/       # Rule providers management: add/update/delete
-│   │       ├── subscriptions/       # Subscription management: import, merge preview
-│   │       ├── mergepreview/        # Config merge preview UI
-│   │       └── proxyimport/         # Proxy import UI
+│   │       └── subscriptions/       # Subscription management: import, merge preview
 │   │
 │   └── utils/
 │       ├── convert.go               # FormatBytes — human-readable byte formatting
@@ -187,18 +164,22 @@ mihomoTui/
 
 | Key              | Action                     |
 |------------------|----------------------------|
-| `F1` / `Ctrl+1` | Dashboard                  |
-| `F2` / `Ctrl+2` | Proxies                    |
-| `F3` / `Ctrl+3` | Connections                |
-| `F4` / `Ctrl+4` | Config                     |
-| `F5` / `Ctrl+5` | Logs                       |
-| `F6` / `Ctrl+6` | Subscriptions              |
-| `F7` / `Ctrl+7` | Proxy Groups               |
-| `Ctrl+C` / `Ctrl+Q` | Quit application       |
-| `Esc`            | Return focus to sidebar    |
-| `Alt+D` / `Alt+P` / `Alt+R` / `Alt+C` / `Alt+L` / `Alt+S` / `Alt+G` | Switch to page by letter |
+| `F1` / `Ctrl+1` / `Alt+D` | Dashboard      |
+| `F2` / `Ctrl+2` / `Alt+P` | Proxies        |
+| `F3` / `Ctrl+3` / `Alt+R` | Connections    |
+| `F4` / `Ctrl+4` / `Alt+C` | Config         |
+| `F5` / `Ctrl+5` / `Alt+L` | Logs           |
+| `F6` / `Ctrl+6` / `Alt+S` | Subscriptions  |
+| `F7` / `Ctrl+7` / `Alt+G` | Proxy Groups   |
+| `F8` / `Ctrl+8` / `Alt+U` | Rules          |
+| `F9` / `Ctrl+9` / `Alt+T` | Rule Providers |
+| `F10` / `Ctrl+0` / `Alt+K`| Settings       |
+| `F11` / `Alt+M`           | Config Manager |
+| `Ctrl+C` / `Ctrl+Q`       | Quit application |
+| `Esc`            | Return focus to navigation bar |
 | `Tab` / `Shift+Tab` | Cycle focus between controls |
 | `Ctrl+R`        | Refresh current page data  |
+| `?`             | Show/hide keyboard shortcuts help |
 
 ### Rules Page Shortcuts
 
@@ -214,7 +195,7 @@ mihomoTui/
 | `Alt+↓`         | Move selected rule down    |
 | `/`             | Focus search filter        |
 
-> Mouse navigation is also fully supported — click sidebar items, buttons, and table cells.
+> Mouse navigation is also fully supported — click nav bar items, buttons, and table cells.
 
 ## Quick Start
 
@@ -228,7 +209,7 @@ mihomoTui/
 
 ```bash
 # Clone the repository
-git clone https://github.com/shuideyimei/mihomoTui.git
+git clone <your-repo-url>/mihomoTui.git
 cd mihomoTui
 
 # Install dependencies
@@ -241,7 +222,7 @@ go run main.go
 ### First-Time Setup
 
 1. Start the application
-2. Navigate to the **Config** page (click sidebar or press `F4`/`Ctrl+4`)
+2. Navigate to the **Config** page (click nav bar or press `F4`/`Ctrl+4`)
 3. Enter your Mihomo API address (default: `http://127.0.0.1:9090`)
 4. Enter your API Secret (if configured in Mihomo)
 5. Save — config is written to `~/.config/mihomoTui/config.json`
@@ -315,8 +296,3 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 - [Mihomo](https://github.com/MetaCubeX/mihomo) — The core proxy engine
 - [tview](https://github.com/rivo/tview) — Powerful terminal UI library for Go
 - [tcell](https://github.com/gdamore/tcell/v2) — Low-level terminal handling
-
-## Contact
-
-- Submit an [Issue](https://github.com/shuideyimei/mihomoTui/issues)
-- Start a [Discussion](https://github.com/shuideyimei/mihomoTui/discussions)

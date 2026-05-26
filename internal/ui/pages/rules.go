@@ -106,16 +106,24 @@ func (r *RulesPage) setupAddForm() {
 	r.addForm = tview.NewForm()
 	r.addForm.SetBorder(true)
 	r.addForm.SetTitle(" 添加规则 ")
+	r.addForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.typeDrop = tview.NewDropDown()
 	r.typeDrop.SetLabel("类型 ")
+	r.typeDrop.SetFieldBackgroundColor(ui.ThemeInputBg)
+	r.typeDrop.SetListStyles(
+		tcell.StyleDefault.Background(tcell.ColorDarkGray).Foreground(tcell.ColorWhite),
+		tcell.StyleDefault.Background(ui.ThemeHighlightBg).Foreground(tcell.ColorBlack),
+	)
 	for _, t := range ruleTypes {
 		r.typeDrop.AddOption(t, nil)
 	}
 	r.typeDrop.SetCurrentOption(0)
 	r.payloadInput = tview.NewInputField()
+	r.payloadInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.payloadInput.SetLabel("内容 ")
 	r.payloadInput.SetFieldWidth(40)
 	r.proxyInput = tview.NewInputField()
+	r.proxyInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.proxyInput.SetLabel("代理策略 ")
 	r.proxyInput.SetFieldWidth(20)
 
@@ -125,10 +133,13 @@ func (r *RulesPage) setupAddForm() {
 	r.addForm.AddButton(" 保存 ", r.onAdd)
 	r.addForm.AddButton(" 取消 ", r.onCancelAdd)
 	r.addForm.SetButtonsAlign(tview.AlignCenter)
+	r.addForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	r.addForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 }
 
 func (r *RulesPage) setupSearchInput() {
 	r.searchInput = tview.NewInputField()
+	r.searchInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.searchInput.SetLabel("搜索: ")
 	r.searchInput.SetPlaceholder("输入关键词过滤规则...")
 	r.searchInput.SetChangedFunc(func(text string) {
@@ -148,7 +159,7 @@ func (r *RulesPage) setupTable() {
 	headers := []string{"类型", "内容", "代理"}
 	for i, header := range headers {
 		cell := tview.NewTableCell(header).
-			SetTextColor(tcell.ColorYellow).
+			SetTextColor(tcell.ColorGray).
 			SetAlign(tview.AlignCenter).
 			SetSelectable(false)
 		r.table.SetCell(0, i, cell)
@@ -160,19 +171,37 @@ func (r *RulesPage) setupActionBar() {
 	r.actionBar.SetBorder(true)
 	r.actionBar.SetTitle(" 操作 ")
 
+	// Gray button style — no light blue
+	btnStyle := tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite)
+	btnFocus := tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite)
+
 	addBtn := tview.NewButton("[A] 添加")
+	addBtn.SetStyle(btnStyle)
+	addBtn.SetActivatedStyle(btnFocus)
 	addBtn.SetSelectedFunc(r.showAddDialog)
 	deleteBtn := tview.NewButton("[D] 删除")
+	deleteBtn.SetStyle(btnStyle)
+	deleteBtn.SetActivatedStyle(btnFocus)
 	deleteBtn.SetSelectedFunc(func() { go r.deleteSelected() })
 	moveUpBtn := tview.NewButton("[↑] 上移")
+	moveUpBtn.SetStyle(btnStyle)
+	moveUpBtn.SetActivatedStyle(btnFocus)
 	moveUpBtn.SetSelectedFunc(func() { go r.moveUp() })
 	moveDownBtn := tview.NewButton("[↓] 下移")
+	moveDownBtn.SetStyle(btnStyle)
+	moveDownBtn.SetActivatedStyle(btnFocus)
 	moveDownBtn.SetSelectedFunc(func() { go r.moveDown() })
 	moveToBtn := tview.NewButton("[M] 移动至")
+	moveToBtn.SetStyle(btnStyle)
+	moveToBtn.SetActivatedStyle(btnFocus)
 	moveToBtn.SetSelectedFunc(func() { go r.showMoveToDialog() })
 	refreshBtn := tview.NewButton("[R] 刷新")
+	refreshBtn.SetStyle(btnStyle)
+	refreshBtn.SetActivatedStyle(btnFocus)
 	refreshBtn.SetSelectedFunc(func() { go r.refresh() })
 	pasteBtn := tview.NewButton("[P] 粘贴导入")
+	pasteBtn.SetStyle(btnStyle)
+	pasteBtn.SetActivatedStyle(btnFocus)
 	pasteBtn.SetSelectedFunc(r.showPasteImport)
 
 	r.actionBar.AddItem(refreshBtn, 0, 1, false)
@@ -186,6 +215,7 @@ func (r *RulesPage) setupActionBar() {
 
 func (r *RulesPage) setupMoveToForm() {
 	r.moveToInput = tview.NewInputField()
+	r.moveToInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.moveToInput.SetLabel("目标位置 ")
 	r.moveToInput.SetPlaceholder("输入序号 (1-总条数)")
 	r.moveToInput.SetFieldWidth(10)
@@ -193,12 +223,15 @@ func (r *RulesPage) setupMoveToForm() {
 	r.moveToForm = tview.NewForm()
 	r.moveToForm.SetBorder(true)
 	r.moveToForm.SetTitle(" 移动规则至 ")
+	r.moveToForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.moveToForm.AddFormItem(r.moveToInput)
 	r.moveToForm.AddButton(" 确认 ", r.onMoveTo)
 	r.moveToForm.AddButton(" 取消 ", func() {
 		r.hideMoveToDialog()
 	})
 	r.moveToForm.SetButtonsAlign(tview.AlignCenter)
+	r.moveToForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	r.moveToForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 }
 
 func (r *RulesPage) setupStatusText() {
@@ -207,6 +240,7 @@ func (r *RulesPage) setupStatusText() {
 	r.statusText.SetTitle(" 状态 ")
 	r.statusText.SetDynamicColors(true)
 	r.statusText.SetText("[green]就绪[white]")
+
 }
 
 func (r *RulesPage) setupEventHandlers() {
@@ -302,12 +336,16 @@ func (r *RulesPage) setupPasteImport() {
 
 	btnBar := tview.NewFlex()
 	importBtn := tview.NewButton(" 导入 ")
+	importBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	importBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	importBtn.SetSelectedFunc(func() {
 		if r.pasteFormVisible {
 			go r.processPasteImport()
 		}
 	})
 	cancelBtn := tview.NewButton(" 取消 ")
+	cancelBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	cancelBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	cancelBtn.SetSelectedFunc(func() {
 		r.hidePasteImport()
 	})
@@ -782,7 +820,7 @@ func (r *RulesPage) refresh() {
 			go ui.Updater.UpdateUi(func() {
 				r.rules = displayRules
 				r.updateTable()
-				r.showStatus(fmt.Sprintf("[green]%d[white] 条规则", len(rulesData)))
+				r.showStatus(fmt.Sprintf("[green]%d[-] 条规则", len(rulesData)))
 			})
 		}
 	}()
@@ -794,7 +832,7 @@ func (r *RulesPage) updateTable() {
 	headers := []string{"#", "类型", "内容", "代理"}
 	for i, header := range headers {
 		cell := tview.NewTableCell(header).
-			SetTextColor(tcell.ColorYellow).
+			SetTextColor(tcell.ColorGray).
 			SetAlign(tview.AlignCenter).
 			SetSelectable(false)
 		r.table.SetCell(0, i, cell)
@@ -817,12 +855,12 @@ func (r *RulesPage) updateTable() {
 			SetTextColor(tcell.ColorGray).
 			SetAlign(tview.AlignCenter)
 		typeCell := tview.NewTableCell(rule.Type).
-			SetTextColor(tcell.ColorBlue).
+			SetTextColor(tcell.ColorWhite).
 			SetAlign(tview.AlignCenter)
 		payloadCell := tview.NewTableCell(rule.Payload).
 			SetTextColor(tcell.ColorWhite)
 		proxyCell := tview.NewTableCell(rule.Proxy).
-			SetTextColor(tcell.ColorGreen).
+			SetTextColor(tcell.ColorGray).
 			SetAlign(tview.AlignCenter)
 
 		r.table.SetCell(row, 0, idxCell)
@@ -840,9 +878,9 @@ func (r *RulesPage) updateTable() {
 			r.showStatus(fmt.Sprintf("[yellow]未找到匹配的规则（共 %d 条）[white]", totalCount))
 		}
 	} else {
-		statusMsg := fmt.Sprintf("[green]%d[white] 条规则", totalCount)
+		statusMsg := fmt.Sprintf("[green]%d[-] 条规则", totalCount)
 		if r.filterText != "" {
-			statusMsg = fmt.Sprintf("[green]%d/%d[white] 条规则", visibleCount, totalCount)
+			statusMsg = fmt.Sprintf("[green]%d/%d[-] 条规则", visibleCount, totalCount)
 		}
 		r.showStatus(statusMsg)
 	}

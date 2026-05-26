@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -195,11 +197,18 @@ func findMihomoProcessConfig() []string {
 	return paths
 }
 
-// writeConfig writes the YAML document to the config file with sudo + ownership + permissions preservation
+// writeConfig writes the YAML document to the config file with sudo + ownership + permissions preservation.
+// Resolves symlinks before writing to prevent symlink-following attacks.
 func writeConfig(doc *yaml.Node, configPath string) error {
 	out, err := yaml.Marshal(doc)
 	if err != nil {
 		return fmt.Errorf("序列化配置失败: %w", err)
+	}
+
+	// Resolve symlinks to prevent sudo cp from following a malicious symlink
+	realPath, err := filepath.EvalSymlinks(configPath)
+	if err != nil {
+		return fmt.Errorf("解析配置文件路径失败: %w", err)
 	}
 
 	tmpFile, err := os.CreateTemp("", "mihomo_config_*.yaml")
@@ -210,13 +219,19 @@ func writeConfig(doc *yaml.Node, configPath string) error {
 	tmpFile.Close()
 	defer os.Remove(tmpPath)
 
-	if err := os.WriteFile(tmpPath, out, 0644); err != nil {
+	if err := os.WriteFile(tmpPath, []byte(out), 0644); err != nil {
 		return fmt.Errorf("写入临时文件失败: %w", err)
 	}
 
-	origStat, statErr := os.Stat(configPath)
+	// Verify the temp file is still a regular file (prevent TOCTOU swap)
+	tmpStat, err := os.Stat(tmpPath)
+	if err != nil || !tmpStat.Mode().IsRegular() {
+		return fmt.Errorf("临时文件状态异常: %w", err)
+	}
 
-	cmd := exec.Command("sudo", "cp", tmpPath, configPath)
+	origStat, statErr := os.Stat(realPath)
+
+	cmd := exec.Command("sudo", "cp", tmpPath, realPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("写入配置文件失败 (需要 sudo 权限): %s", string(output))
 	}
@@ -225,13 +240,13 @@ func writeConfig(doc *yaml.Node, configPath string) error {
 	if statErr == nil && origStat != nil {
 		// Restore ownership (user:group)
 		if st, ok := origStat.Sys().(*syscall.Stat_t); ok {
-			if chownErr := exec.Command("sudo", "chown", fmt.Sprintf("%d:%d", st.Uid, st.Gid), configPath).Run(); chownErr != nil {
+			if chownErr := exec.Command("sudo", "chown", fmt.Sprintf("%d:%d", st.Uid, st.Gid), realPath).Run(); chownErr != nil {
 				return fmt.Errorf("恢复文件所有权失败: %w", chownErr)
 			}
 		}
 		// Restore file permissions (e.g., 0644) — sudo cp with default umask may change them
 		perm := fmt.Sprintf("%o", origStat.Mode().Perm())
-		if chmodErr := exec.Command("sudo", "chmod", perm, configPath).Run(); chmodErr != nil {
+		if chmodErr := exec.Command("sudo", "chmod", perm, realPath).Run(); chmodErr != nil {
 			return fmt.Errorf("恢复文件权限失败: %w", chmodErr)
 		}
 	}
@@ -249,6 +264,12 @@ func parseConfig(configPath string) (*yaml.Node, error) {
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
+
+	// Guard against empty/minimal YAML files to avoid index panic on doc.Content[0]
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 || doc.Content[0] == nil {
+		return nil, fmt.Errorf("配置文件为空或格式无效: %s", configPath)
+	}
+
 	return &doc, nil
 }
 
@@ -566,7 +587,9 @@ func GetAllProxyGroupsFromConfig() ([]ProxyGroupEntry, error) {
 			case "url":
 				entry.URL = val.Value
 			case "interval":
-				fmt.Sscanf(val.Value, "%d", &entry.Interval)
+				if v, err := strconv.Atoi(val.Value); err == nil {
+					entry.Interval = v
+				}
 			case "filter":
 				entry.Filter = val.Value
 			case "use":
@@ -859,7 +882,11 @@ type RuleProviderEntry struct {
 
 // createRuleProviderValue builds a yaml.MappingNode for a rule-provider entry.
 func createRuleProviderValue(name, url, behavior string, interval int) *yaml.Node {
-	path := fmt.Sprintf("./ruleset/%s.yaml", name)
+	// Sanitize name to prevent path traversal (e.g. "../../etc/passwd")
+	safeName := strings.ReplaceAll(name, "..", "_")
+	safeName = strings.ReplaceAll(safeName, "/", "_")
+	safeName = strings.ReplaceAll(safeName, "\\", "_")
+	path := fmt.Sprintf("./ruleset/%s.yaml", safeName)
 	return &yaml.Node{
 		Kind: yaml.MappingNode,
 		Content: []*yaml.Node{
@@ -923,9 +950,9 @@ func GetRuleProvidersFromConfig() ([]RuleProviderEntry, error) {
 			case "path":
 				entry.Path = val.Content[k+1].Value
 			case "interval":
-				var err error
-				fmt.Sscanf(val.Content[k+1].Value, "%d", &entry.Interval)
-				_ = err
+				if v, err := strconv.Atoi(val.Content[k+1].Value); err == nil {
+					entry.Interval = v
+				}
 			}
 		}
 		entries = append(entries, entry)

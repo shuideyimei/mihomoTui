@@ -2,13 +2,9 @@
 
 > 在终端中提供桌面级客户端体验 — 基于 Go 和 tview 构建的 [Mihomo](https://github.com/MetaCubeX/mihomo) 代理管理 TUI。
 
-[![License](https://img.shields.io/github/license/FlySky-z/mihomoTui)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/FlySky-z/mihomoTui?style=social)](https://github.com/FlySky-z/mihomoTui/stargazers)
 [![Go Version](https://img.shields.io/badge/Go-1.24.1-00ADD8)](https://go.dev)
 
 [English](README.md) | 简体中文
-
-![mihomoTui 演示](static/image.png)
 
 ---
 
@@ -26,7 +22,6 @@
 - 🔗 **连接监控** — 查看活跃连接，关闭单个或全部连接，自动刷新
 - 🖱️ **完整鼠标支持** — 点击导航、切换标签页、切换按钮
 - ⌨️ **键盘快捷键** — F 键、Ctrl+数字、Alt+字母快速切换页面
-- 🔄 **配置热重载** — 在 TUI 中直接修改 mihomo config.yaml，失败时自动回滚
 - 📎 **智能配置合并** — 将订阅配置与本地配置智能合并（代理、组、规则），支持冲突解决
 
 ## 项目状态
@@ -48,8 +43,6 @@
 - [x] 规则提供者管理
 - [x] 订阅导入与配置合并
 - [x] 代理组管理（CRUD）
-- [x] 配置热重载与回滚
-- [x] CI/CD — 跨平台构建（Linux、macOS、Windows）
 - [ ] 查看配置详情
 - [ ] 切换配置文件
 - [ ] 从界面修改端口
@@ -65,7 +58,6 @@
 | 配置格式   | JSON（应用配置）+ YAML（mihomo 配置）              |
 | API        | Mihomo REST API（HTTP）                           |
 | 流式数据   | Mihomo SSE/chunked 端点（流量、日志、内存）        |
-| CI/CD      | GitHub Actions（跨平台构建、发布）                 |
 
 ## 项目结构
 
@@ -77,10 +69,6 @@ mihomoTui/
 ├── .gitignore
 ├── static/
 │   └── image.png                    # 演示截图
-│
-├── .github/workflows/
-│   ├── ci-build.yml                 # CI：推送到 main 时执行构建检查
-│   └── build-release.yml            # CD：打标签时跨平台发布
 │
 ├── internal/
 │   ├── app.go                       # 应用编排、页面绑定、布局
@@ -102,9 +90,6 @@ mihomoTui/
 │   │   ├── bus.go                   # 发布/订阅事件总线
 │   │   └── bus_test.go
 │   │
-│   ├── hotreload/
-│   │   └── manager.go               # 配置热重载，支持失败回滚
-│   │
 │   ├── merge/
 │   │   ├── engine.go                # 智能配置合并引擎
 │   │   └── engine_test.go
@@ -115,16 +100,12 @@ mihomoTui/
 │   ├── parser/
 │   │   ├── parser.go                # YAML 配置解析器（Clash/Mihomo 格式）
 │   │   ├── parser_test.go
-│   │   ├── strutil.go               # 字符串工具函数
 │   │   ├── util.go                  # 解析工具
 │   │   └── validate.go              # 验证工具
 │   │
 │   ├── proxygroup/
 │   │   ├── manager.go               # 代理组管理与依赖分析
 │   │   └── manager_test.go
-│   │
-│   ├── runtime/
-│   │   └── state.go                 # 运行时状态容器（总线、缓存、管理器）
 │   │
 │   ├── subscription/
 │   │   └── manager.go               # 订阅导入（URL 或本地文件）
@@ -137,17 +118,15 @@ mihomoTui/
 │   │   ├── proxygroup.go            # ProxyGroupDef、ImportResult、ConflictEntry
 │   │   └── subscription.go          # Subscription & UserInfo
 │   │
-│   ├── updater/
-│   │   └── manager.go               # 后台更新任务管理器
-│   │
 │   ├── ui/
 │   │   ├── ui.go                    # UI 更新器单例（QueueUpdate 封装）
+│   │   ├── theme.go                 # 主题颜色和全局样式初始化
 │   │   │
 │   │   ├── components/
 │   │   │   ├── header.go            # 顶部标题栏（应用名、版本、连接状态）
-│   │   │   ├── sidebar.go           # 侧边导航栏（9 个页面）
+│   │   │   ├── navbar.go            # 水平导航栏（11 个页面）
 │   │   │   ├── statusbar.go         # 底部状态栏（模式、流量、操作提示）
-│   │   │   └── buttonnav.go         # 按钮导航原语
+│   │   │   └── navigation.go        # 焦点导航原语
 │   │   │
 │   │   └── pages/
 │   │       ├── pages.go             # 页面构造函数 & ActivatablePage 接口
@@ -160,9 +139,7 @@ mihomoTui/
 │   │       ├── settings.go          # 设置页面（开发中）
 │   │       ├── proxygroups/         # 代理组管理：CRUD、类型选择
 │   │       ├── ruleproviders/       # 规则提供者管理：添加/更新/删除
-│   │       ├── subscriptions/       # 订阅管理：导入、合并预览
-│   │       ├── mergepreview/        # 配置合并预览 UI
-│   │       └── proxyimport/         # 代理导入 UI
+│   │       └── subscriptions/       # 订阅管理：导入、合并预览
 │   │
 │   └── utils/
 │       ├── convert.go               # FormatBytes — 人类可读字节格式化
@@ -187,18 +164,22 @@ mihomoTui/
 
 | 键               | 动作                |
 |------------------|--------------------|
-| `F1` / `Ctrl+1`  | 仪表盘              |
-| `F2` / `Ctrl+2`  | 代理                |
-| `F3` / `Ctrl+3`  | 连接                |
-| `F4` / `Ctrl+4`  | 配置                |
-| `F5` / `Ctrl+5`  | 日志                |
-| `F6` / `Ctrl+6`  | 订阅                |
-| `F7` / `Ctrl+7`  | 代理组              |
-| `Ctrl+C` / `Ctrl+Q` | 退出程序         |
-| `Esc`            | 返回焦点到侧边栏    |
-| `Alt+D` / `Alt+P` / `Alt+R` / `Alt+C` / `Alt+L` / `Alt+S` / `Alt+G` | 按字母切换页面 |
+| `F1` / `Ctrl+1` / `Alt+D` | 仪表盘   |
+| `F2` / `Ctrl+2` / `Alt+P` | 代理     |
+| `F3` / `Ctrl+3` / `Alt+R` | 连接     |
+| `F4` / `Ctrl+4` / `Alt+C` | 配置     |
+| `F5` / `Ctrl+5` / `Alt+L` | 日志     |
+| `F6` / `Ctrl+6` / `Alt+S` | 订阅     |
+| `F7` / `Ctrl+7` / `Alt+G` | 代理组   |
+| `F8` / `Ctrl+8` / `Alt+U` | 规则     |
+| `F9` / `Ctrl+9` / `Alt+T` | 规则提供者 |
+| `F10` / `Ctrl+0` / `Alt+K`| 设置     |
+| `F11` / `Alt+M`           | 配置管理 |
+| `Ctrl+C` / `Ctrl+Q`       | 退出程序 |
+| `Esc`            | 返回焦点到导航栏 |
 | `Tab` / `Shift+Tab` | 循环切换控件焦点 |
-| `Ctrl+R`         | 刷新当前页面数据    |
+| `Ctrl+R`         | 刷新当前页面数据 |
+| `?`             | 显示/隐藏快捷键帮助 |
 
 ### 规则页面快捷键
 
@@ -214,7 +195,7 @@ mihomoTui/
 | `Alt+↓`         | 下移选中规则         |
 | `/`             | 聚焦搜索过滤框       |
 
-> 也完全支持鼠标导航 — 点击侧边栏、按钮和表格单元格即可操作。
+> 也完全支持鼠标导航 — 点击导航栏、按钮和表格单元格即可操作。
 
 ## 快速开始
 
@@ -228,7 +209,7 @@ mihomoTui/
 
 ```bash
 # 克隆仓库
-git clone https://github.com/shuideyimei/mihomoTui.git
+git clone <your-repo-url>/mihomoTui.git
 cd mihomoTui
 
 # 安装依赖
@@ -241,7 +222,7 @@ go run main.go
 ### 首次使用
 
 1. 启动应用程序
-2. 导航到 **配置** 页面（点击侧边栏或按 `F4`/`Ctrl+4`）
+2. 导航到 **配置** 页面（点击导航栏或按 `F4`/`Ctrl+4`）
 3. 输入你的 Mihomo API 地址（默认：`http://127.0.0.1:9090`）
 4. 输入 API Secret（如果在 Mihomo 中配置了）
 5. 保存 — 配置文件将写入 `~/.config/mihomoTui/config.json`
@@ -315,8 +296,3 @@ go test ./internal/...
 - [Mihomo](https://github.com/MetaCubeX/mihomo) — 核心代理引擎
 - [tview](https://github.com/rivo/tview) — 强大的 Go 终端 UI 库
 - [tcell](https://github.com/gdamore/tcell/v2) — 底层终端处理
-
-## 联系方式
-
-- 提交 [Issue](https://github.com/shuideyimei/mihomoTui/issues)
-- 发起 [Discussion](https://github.com/shuideyimei/mihomoTui/discussions)

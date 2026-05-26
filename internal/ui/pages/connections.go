@@ -7,6 +7,7 @@ import (
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
+	"mihomoTui/internal/utils"
 	"strings"
 	"sync"
 	"time"
@@ -15,28 +16,12 @@ import (
 	"github.com/rivo/tview"
 )
 
-// Connections represents the connections page
-type Connections struct {
-	*ConnectionsPage
-}
-
-// Activate activates the connections page
-func (c *Connections) Activate() {
-	log.Printf("Activating connections page")
-	c.ConnectionsPage.Activate()
-}
-
-// Deactivate deactivates the connections page
-func (c *Connections) Deactivate() {
-	log.Printf("Deactivating connections page")
-	c.ConnectionsPage.Deactivate()
-}
-
 // ConnectionsPage represents the connections management page
 type ConnectionsPage struct {
-	*tview.Pages
+	*tview.Flex
 
 	// Components
+	pages            *tview.Pages
 	mainFlex         *tview.Flex
 	connectionsTable *tview.Table
 	statusText       *tview.TextView
@@ -61,7 +46,8 @@ type ConnectionsPage struct {
 // NewConnectionsPage creates a new connections management page
 func NewConnectionsPage() *ConnectionsPage {
 	page := &ConnectionsPage{
-		Pages:       tview.NewPages(),
+		Flex:        tview.NewFlex(),
+		pages:       tview.NewPages(),
 		connections: make([]models.Connection, 0),
 		autoRefresh: true,
 	}
@@ -113,17 +99,18 @@ func (c *ConnectionsPage) setupLayout() {
 	// Create right panel (info panel + status)
 	rightPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	rightPanel.AddItem(c.infoPanel, 0, 2, false)
-	rightPanel.AddItem(c.statusText, 6, 0, false)
+	rightPanel.AddItem(c.statusText, 3, 0, false)
 
 	// Main layout
 	c.mainFlex = tview.NewFlex().SetDirection(tview.FlexColumn)
 	c.mainFlex.AddItem(c.connectionsTable, 0, 3, true)
-	c.mainFlex.AddItem(rightPanel, 40, 0, false)
+	c.mainFlex.AddItem(rightPanel, 0, 2, false)
 
 	c.mainFlex.SetBorder(true)
 	c.mainFlex.SetTitle(" 连接管理 ")
 
-	c.AddPage("main", c.mainFlex, true, true)
+	c.pages.AddPage("main", c.mainFlex, true, true)
+	c.AddItem(c.pages, 0, 1, true)
 }
 
 // createConnectionsTable creates the connections table
@@ -137,7 +124,7 @@ func (c *ConnectionsPage) createConnectionsTable() {
 	headers := []string{"ID", "网络", "源地址", "目标地址", "代理链", "规则", "上传", "下载", "持续时间"}
 	for i, header := range headers {
 		cell := tview.NewTableCell(header).
-			SetTextColor(tcell.ColorYellow).
+			SetTextColor(tcell.ColorGray).
 			SetAlign(tview.AlignCenter).
 			SetSelectable(false)
 		c.connectionsTable.SetCell(0, i, cell)
@@ -282,8 +269,8 @@ func (c *ConnectionsPage) updateConnectionsTable() {
 		}
 
 		// Format upload/download
-		upload := c.formatBytes(conn.Upload)
-		download := c.formatBytes(conn.Download)
+		upload := utils.FormatBytes(conn.Upload)
+		download := utils.FormatBytes(conn.Download)
 
 		// Calculate duration
 		duration := time.Since(conn.Start).Truncate(time.Second).String()
@@ -300,13 +287,13 @@ func (c *ConnectionsPage) updateConnectionsTable() {
 			align int
 		}{
 			{idDisplay, tcell.ColorWhite, tview.AlignLeft},
-			{conn.Metadata.Network, tcell.ColorLightBlue, tview.AlignCenter},
-			{sourceAddr, tcell.ColorBlue, tview.AlignLeft},
-			{destAddr, tcell.ColorGreen, tview.AlignLeft},
-			{chains, tcell.ColorYellow, tview.AlignLeft},
-			{rule, tcell.ColorPurple, tview.AlignLeft},
-			{upload, tcell.ColorRed, tview.AlignRight},
-			{download, tcell.ColorGreen, tview.AlignRight},
+			{conn.Metadata.Network, tcell.ColorWhite, tview.AlignCenter},
+			{sourceAddr, tcell.ColorGray, tview.AlignLeft},
+			{destAddr, tcell.ColorWhite, tview.AlignLeft},
+			{chains, tcell.ColorGray, tview.AlignLeft},
+			{rule, tcell.ColorGray, tview.AlignLeft},
+			{upload, tcell.ColorWhite, tview.AlignRight},
+			{download, tcell.ColorWhite, tview.AlignRight},
 			{duration, tcell.ColorGray, tview.AlignRight},
 		}
 
@@ -352,7 +339,7 @@ func (c *ConnectionsPage) updateInfoPanel(conn models.Connection) {
 		conn.Metadata.DestinationIP, conn.Metadata.DestinationPort, c.safeString(conn.Metadata.Host, "未知"),
 		c.formatChains(conn.Chains),
 		c.safeString(conn.Rule, "DIRECT"), c.safeString(conn.RulePayload, "无"),
-		c.formatBytes(conn.Upload), c.formatBytes(conn.Download), c.formatBytes(conn.Upload+conn.Download),
+		utils.FormatBytes(conn.Upload), utils.FormatBytes(conn.Download), utils.FormatBytes(conn.Upload+conn.Download),
 		conn.Start.Format("2006-01-02 15:04:05"),
 		time.Since(conn.Start).Truncate(time.Second).String(),
 		c.safeString(conn.Metadata.DNSMode, "未知"),
@@ -387,8 +374,8 @@ func (c *ConnectionsPage) showConnectionDetails() {
 	}
 
 	detailFlex := c.createDetailView(conn)
-	c.AddPage("detail", detailFlex, true, true)
-	c.SwitchToPage("detail")
+	c.pages.AddPage("detail", detailFlex, true, true)
+	c.pages.SwitchToPage("detail")
 	ui.Updater.SetFocus(detailFlex)
 }
 
@@ -402,9 +389,9 @@ func (c *ConnectionsPage) createDetailView(conn *models.Connection) *tview.Flex 
 	}
 	fmt.Fprintf(&b, "[yellow]目标地址:[white] %s\n", destAddr)
 	fmt.Fprintf(&b, "[yellow]主机:[white] %s\n", c.safeString(conn.Metadata.Host, "无"))
-	fmt.Fprintf(&b, "[yellow]上传:[white] %s\n", c.formatBytes(conn.Upload))
-	fmt.Fprintf(&b, "[yellow]下载:[white] %s\n", c.formatBytes(conn.Download))
-	fmt.Fprintf(&b, "[yellow]总量:[white] %s\n", c.formatBytes(conn.Upload+conn.Download))
+	fmt.Fprintf(&b, "[yellow]上传:[white] %s\n", utils.FormatBytes(conn.Upload))
+	fmt.Fprintf(&b, "[yellow]下载:[white] %s\n", utils.FormatBytes(conn.Download))
+	fmt.Fprintf(&b, "[yellow]总量:[white] %s\n", utils.FormatBytes(conn.Upload+conn.Download))
 	fmt.Fprintf(&b, "[yellow]开始时间:[white] %s\n", conn.Start.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(&b, "[yellow]持续时间:[white] %s\n", time.Since(conn.Start).Truncate(time.Second).String())
 	fmt.Fprintf(&b, "[yellow]代理链:[white] %s\n", c.formatChains(conn.Chains))
@@ -425,9 +412,11 @@ func (c *ConnectionsPage) createDetailView(conn *models.Connection) *tview.Flex 
 		SetText(b.String())
 
 	closeBtn := tview.NewButton(" 关闭 (Esc) ")
+	closeBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	closeBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	closeBtn.SetSelectedFunc(func() {
-		c.RemovePage("detail")
-		c.SwitchToPage("main")
+		c.pages.RemovePage("detail")
+		c.pages.SwitchToPage("main")
 		ui.Updater.SetFocus(c.connectionsTable)
 	})
 
@@ -439,8 +428,8 @@ func (c *ConnectionsPage) createDetailView(conn *models.Connection) *tview.Flex 
 
 	popupFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEsc {
-			c.RemovePage("detail")
-			c.SwitchToPage("main")
+			c.pages.RemovePage("detail")
+			c.pages.SwitchToPage("main")
 			ui.Updater.SetFocus(c.connectionsTable)
 			return nil
 		}
@@ -464,19 +453,7 @@ func (c *ConnectionsPage) focusTable() {
 	ui.Updater.SetFocus(c.connectionsTable)
 }
 
-// formatBytes formats byte count to human readable format
-func (c *ConnectionsPage) formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%dB", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f%cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-}
+
 
 // formatChains formats proxy chains for display
 func (c *ConnectionsPage) formatChains(chains []string) string {
@@ -500,23 +477,12 @@ func (c *ConnectionsPage) updateStatus() {
 	connCount := len(c.connections)
 	lastUpdate := c.lastUpdate
 	refreshCount := c.refreshCount
-	autoRefresh := c.autoRefresh
 	c.mutex.RUnlock()
 
-	autoRefreshIcon := "⏸"
-	if autoRefresh {
-		autoRefreshIcon = "▶"
-	}
-
-	status := fmt.Sprintf(`[green]● %d[white] 连接 | [yellow]%s[white] 更新:%d | [cyan]%s[white] 自动刷新
-
-[gray]快捷键:[white]
-[yellow]F5/R[white] 刷新 [yellow]T[white] 自动 [yellow]D/Del[white] 关闭连接
-[yellow]↑↓[white] 选择连接`,
+	status := fmt.Sprintf(`%d 个连接 | 更新: %s (#%d)`,
 		connCount,
 		lastUpdate.Format("15:04"),
 		refreshCount,
-		autoRefreshIcon,
 	)
 
 	go ui.Updater.UpdateUi(func() {

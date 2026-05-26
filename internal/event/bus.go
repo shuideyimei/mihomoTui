@@ -2,6 +2,7 @@ package event
 
 import (
 	"log"
+	"strconv"
 	"sync"
 
 	"mihomoTui/internal/types"
@@ -23,22 +24,30 @@ func NewBus() *Bus {
 
 // Publish sends an event to all subscribers of its type.
 // Handlers are called synchronously; for non-blocking dispatch, wrap in a goroutine.
+// A snapshot of handlers is taken under RLock to avoid deadlock if a handler
+// calls Subscribe() (which acquires a write lock) during event dispatch.
 func (b *Bus) Publish(event types.Event) {
 	b.mu.RLock()
 	handlers, ok := b.subscribers[event.Type]
+	var handlerList []types.EventHandler
 	if ok {
-		for id, handler := range handlers {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("[eventbus] panic in handler %s for %s: %v", id, event.Type, r)
-					}
-				}()
-				handler(event)
-			}()
+		handlerList = make([]types.EventHandler, 0, len(handlers))
+		for _, h := range handlers {
+			handlerList = append(handlerList, h)
 		}
 	}
 	b.mu.RUnlock()
+
+	for _, handler := range handlerList {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[eventbus] panic in handler for %s: %v", event.Type, r)
+				}
+			}()
+			handler(event)
+		}()
+	}
 }
 
 // Subscribe registers a handler for an event type. Returns an unsubscribe function.
@@ -92,20 +101,5 @@ func (b *Bus) SubscriberCount(eventType types.EventType) int {
 }
 
 func (b *Bus) makeID(et types.EventType, n int) string {
-	return string(et) + ":" + itoa(n)
-}
-
-// Simple int-to-string for zero allocs (avoids fmt import).
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var buf [12]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(buf[i:])
+	return string(et) + ":" + strconv.Itoa(n)
 }

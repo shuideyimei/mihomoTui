@@ -99,19 +99,28 @@ func (p *Page) setupUI() {
 	p.importForm = tview.NewForm()
 	p.importForm.SetBorder(true)
 	p.importForm.SetTitle(" 导入规则提供者 ")
+	p.importForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput = tview.NewInputField()
+	p.nameInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput.SetLabel("名称 ")
 	p.nameInput.SetFieldWidth(30)
 	p.urlInput = tview.NewInputField()
+	p.urlInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.urlInput.SetLabel("URL ")
 	p.urlInput.SetFieldWidth(50)
 	p.behaviorSelect = tview.NewDropDown()
 	p.behaviorSelect.SetLabel("行为 ")
+	p.behaviorSelect.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.behaviorSelect.AddOption("domain", nil)
 	p.behaviorSelect.AddOption("ipcidr", nil)
 	p.behaviorSelect.AddOption("classical", nil)
 	p.behaviorSelect.SetCurrentOption(0)
+	p.behaviorSelect.SetListStyles(
+		tcell.StyleDefault.Background(tcell.ColorDarkGray).Foreground(tcell.ColorWhite),
+		tcell.StyleDefault.Background(ui.ThemeHighlightBg).Foreground(tcell.ColorBlack),
+	)
 	p.intervalInput = tview.NewInputField()
+	p.intervalInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.intervalInput.SetLabel("更新间隔(秒) ")
 	p.intervalInput.SetFieldWidth(10)
 	p.intervalInput.SetText("3600")
@@ -123,6 +132,8 @@ func (p *Page) setupUI() {
 	p.importForm.AddButton(" 导入 ", p.onImportClicked)
 	p.importForm.AddButton(" 取消 ", p.onCancelImport)
 	p.importForm.SetButtonsAlign(tview.AlignCenter)
+	p.importForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	p.importForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 
 	p.setupPasteImport()
 
@@ -143,6 +154,9 @@ func (p *Page) setupSubList() {
 	p.subList = tview.NewList()
 	p.subList.SetBorder(true)
 	p.subList.SetTitle(" 规则提供者 ")
+	p.subList.SetMainTextColor(tcell.ColorWhite)
+	p.subList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
+	p.subList.SetSelectedTextColor(tcell.ColorBlack)
 	p.subList.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 		switch ev.Key() {
 		case tcell.KeyEnter:
@@ -186,10 +200,21 @@ func (p *Page) setupActionBar() {
 	importBtn.SetSelectedFunc(p.showImportForm)
 	quickImportBtn := tview.NewButton("[Q] 快速导入")
 	quickImportBtn.SetSelectedFunc(p.showQuickImportPage)
+	quickImportBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	quickImportBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	pasteBtn := tview.NewButton("[P] 粘贴导入")
+	pasteBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	pasteBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	pasteBtn.SetSelectedFunc(p.showPasteImport)
 	deleteBtn := tview.NewButton("[D] 删除")
+	deleteBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	deleteBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	deleteBtn.SetSelectedFunc(func() { go p.deleteSelected() })
+
+	refreshBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	refreshBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	importBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	importBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 
 	p.actionBar.AddItem(refreshBtn, 0, 1, false)
 	p.actionBar.AddItem(importBtn, 0, 1, false)
@@ -271,6 +296,9 @@ func (p *Page) showQuickImportPage() {
 	quickList.SetBorder(true)
 	quickList.SetTitle(" 快速导入 - Loyalsoldier/clash-rules ")
 	quickList.SetTitleAlign(tview.AlignLeft)
+	quickList.SetMainTextColor(tcell.ColorWhite)
+	quickList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
+	quickList.SetSelectedTextColor(tcell.ColorBlack)
 
 	for _, preset := range quickPresets {
 		desc := fmt.Sprintf("%s | %s", preset.Behavior, preset.URL)
@@ -503,12 +531,16 @@ func (p *Page) setupPasteImport() {
 
 	btnBar := tview.NewFlex()
 	importBtn := tview.NewButton(" 导入 ")
+	importBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	importBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	importBtn.SetSelectedFunc(func() {
 		if p.showInput {
 			go p.processPasteImportYAML()
 		}
 	})
 	cancelBtn := tview.NewButton(" 取消 ")
+	cancelBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	cancelBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	cancelBtn.SetSelectedFunc(func() {
 		p.hidePasteImport()
 	})

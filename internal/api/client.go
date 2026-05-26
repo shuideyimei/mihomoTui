@@ -8,31 +8,45 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
 	"mihomoTui/internal/models"
 )
 
-var stopLogSync context.CancelFunc
+var (
+	stopLogSync context.CancelFunc
+	logFile     *os.File
+)
 
-func init() {
+// InitLogging sets up the application log file. Should be called once at startup.
+// Returns a shutdown function that flushes and closes the log.
+func InitLogging() func() {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatalf("failed to get home dir: %v", err)
+		log.SetOutput(os.Stderr)
+		log.Printf("warning: cannot determine home dir: %v, logging to stderr", err)
+		return func() {}
 	}
 	logDir := filepath.Join(homeDir, ".config", "mihomoTui")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		log.Fatalf("failed to create log dir: %v", err)
+		log.SetOutput(os.Stderr)
+		log.Printf("warning: cannot create log dir %s: %v, logging to stderr", logDir, err)
+		return func() {}
 	}
 	logPath := filepath.Join(logDir, "mihomo.log")
 
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
-		log.Fatalf("failed to open log file: %v", err)
+		log.SetOutput(os.Stderr)
+		log.Printf("warning: cannot open log file %s: %v, logging to stderr", logPath, err)
+		return func() {}
 	}
+	logFile = f
 
 	ctx, cancel := context.WithCancel(context.Background())
 	stopLogSync = cancel
@@ -51,6 +65,11 @@ func init() {
 	}()
 
 	log.SetOutput(logFile)
+
+	return func() {
+		cancel()
+		log.SetOutput(os.Stderr)
+	}
 }
 
 var (
@@ -253,10 +272,12 @@ func (c *HttpClient) GetProviders() (*models.ProvidersResponse, error) {
 func (c *HttpClient) TestGroupDelay(groupName string, testURL string, timeout int) (map[string]int, error) {
 	endpoint := fmt.Sprintf("/group/%s/delay", groupName)
 
-	params := fmt.Sprintf("?url=%s&timeout=%d", testURL, timeout)
-	if testURL == "" {
-		params = fmt.Sprintf("?timeout=%d", timeout)
+	query := url.Values{}
+	if testURL != "" {
+		query.Set("url", testURL)
 	}
+	query.Set("timeout", strconv.Itoa(timeout))
+	params := "?" + query.Encode()
 
 	resp, err := c.makeRequest("GET", endpoint+params, nil)
 	if err != nil {
@@ -319,10 +340,12 @@ func (c *HttpClient) SelectProxy(groupName, proxyName string) error {
 func (c *HttpClient) TestProxyDelay(name string, testURL string, timeout int) (int, error) {
 	endpoint := fmt.Sprintf("/proxies/%s/delay", name)
 
-	params := fmt.Sprintf("?url=%s&timeout=%d", testURL, timeout)
-	if testURL == "" {
-		params = fmt.Sprintf("?timeout=%d", timeout)
+	query := url.Values{}
+	if testURL != "" {
+		query.Set("url", testURL)
 	}
+	query.Set("timeout", strconv.Itoa(timeout))
+	params := "?" + query.Encode()
 
 	resp, err := c.makeRequest("GET", endpoint+params, nil)
 	if err != nil {

@@ -175,7 +175,6 @@ func TestConfigPage_GoroutineLeak(t *testing.T) {
 	}
 }
 
-var _ ActivatablePage = (*Config)(nil)
 var _ ActivatablePage = (*ConfigPage)(nil)
 
 func TestConfigPage_Deactivate(t *testing.T) {
@@ -198,8 +197,10 @@ func TestConfigPage_Layout(t *testing.T) {
 	if page.form == nil {
 		t.Error("form should not be nil after construction")
 	}
-	if page.statusText == nil {
-		t.Error("statusText should not be nil after construction")
+	// Status text is embedded in the form via AddTextView
+	statusItem := page.form.GetFormItemByLabel("状态")
+	if statusItem == nil {
+		t.Error("status item should not be nil after construction")
 	}
 	if title := page.form.GetTitle(); title == "" {
 		t.Error("form title should not be empty")

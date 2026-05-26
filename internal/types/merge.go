@@ -27,7 +27,7 @@ type MergeStrategy struct {
 // - Proxy providers: replace (subscription is authoritative)
 // - Proxy groups: merge (preserve user customization, add new)
 // - Rules: append (subscription rules go after user rules)
-// - DNS, Tun: keep_local (user's DNS/Tun config takes priority)
+// - DNS, Tun: skip (user's DNS/Tun config takes priority)
 func DefaultMergeStrategy() MergeStrategy {
 	return MergeStrategy{
 		Proxies:        MergeModeReplace,
@@ -35,8 +35,8 @@ func DefaultMergeStrategy() MergeStrategy {
 		Rules:          MergeModeAppend,
 		RuleProviders:  MergeModeMerge,
 		ProxyProviders: MergeModeReplace,
-		DNS:            MergeModeReplace,
-		Tun:            MergeModeReplace,
+		DNS:            MergeModeSkip,
+		Tun:            MergeModeSkip,
 		Others:         MergeModeReplace,
 	}
 }

@@ -10,25 +10,9 @@ import (
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
-
-// Config represents the config page
-type Config struct {
-	*ConfigPage
-}
-
-// Activate activates the config page
-func (c *Config) Activate() {
-	log.Printf("Activating config page")
-	c.ConfigPage.Activate()
-}
-
-// Deactivate deactivates the config page
-func (c *Config) Deactivate() {
-	log.Printf("Deactivating config page")
-	c.ConfigPage.Deactivate()
-}
 
 // ConfigPage represents the configuration page
 type ConfigPage struct {
@@ -36,8 +20,7 @@ type ConfigPage struct {
 	configManager *config.Manager
 
 	// Form components
-	form       *tview.Form
-	statusText *tview.TextView
+	form *tview.Form
 
 	// Labels
 	labels     []string
@@ -54,7 +37,6 @@ func NewConfigPage(configManager *config.Manager) *ConfigPage {
 		Flex:          tview.NewFlex(),
 		configManager: configManager,
 		form:          tview.NewForm(),
-		statusText:    tview.NewTextView(),
 		currentConfig: configManager.Get(),
 		labels:        []string{"API地址", "API密钥"},
 		portLabels:    []string{"HTTP端口", "SOCKS端口", "混合端口"},
@@ -71,17 +53,16 @@ func (c *ConfigPage) setupUI() {
 	c.form.SetBorder(true)
 	c.form.SetTitle(" 应用配置 ")
 	c.form.SetButtonsAlign(tview.AlignCenter)
+	c.form.SetFieldBackgroundColor(ui.ThemeInputBg)
+	c.form.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	c.form.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 
-	// Configure status text
-	c.statusText.SetBorder(true)
-	c.statusText.SetTitle(" 状态 ")
-	c.statusText.SetDynamicColors(true)
-	c.statusText.SetText("[green]加载配置中...[white]")
+	// Add inline status as a read-only field inside the form
+	c.form.AddTextView("状态", "[green]加载配置中...[white]", 0, 1, true, false)
 
-	// Layout - status bar now has fixed height of 1 line + borders (3 total)
+	// Layout: just the form
 	c.SetDirection(tview.FlexColumn)
-	c.AddItem(c.form, 0, 3, true)
-	c.AddItem(c.statusText, 0, 1, false)
+	c.AddItem(c.form, 0, 1, true)
 }
 
 // setUpFormItems initializes the form items
@@ -99,7 +80,7 @@ func (c *ConfigPage) setUpFormItems() {
 		}, nil)
 	}
 
-	// Action buttons
+	// Action buttons — styled via Form to avoid default blue focus
 	c.form.AddButton("保存", c.saveConfig)
 	c.form.AddButton("重置", c.resetConfig)
 	c.form.AddButton("测试连接", c.testConnection)
@@ -107,20 +88,25 @@ func (c *ConfigPage) setUpFormItems() {
 
 // Activate activates the config page
 func (c *ConfigPage) Activate() {
-	ui.Updater.UpdateUi(
-		func() {
-			c.updateConfigForm()
-		})
+	c.setStatus("[yellow]正在加载配置...[white]")
 
+	// Load local config immediately
+	c.updateConfigForm()
+
+	// Fetch remote port config in background
 	go func() {
 		config, err := api.Client.GetConfig()
 		if err != nil {
 			log.Printf("failed to fetch mihomo config for ports: %v", err)
+			ui.Updater.UpdateUi(func() {
+				c.setStatus("[green]配置加载完毕[white]")
+			})
 			return
 		}
 		c.mihomoConfig = config
 		ui.Updater.UpdateUi(func() {
 			c.updatePortFields()
+			c.setStatus("[green]配置加载完毕[white]")
 		})
 	}()
 }
@@ -135,7 +121,6 @@ func (c *ConfigPage) updateConfigForm() {
 		c.form.GetFormItemByLabel(label).(*tview.InputField).SetText(c.currentConfig.GetValue(label))
 	}
 	c.updatePortFields()
-	c.statusText.SetText("[green]配置加载完毕[white]")
 }
 
 func (c *ConfigPage) updatePortFields() {
@@ -264,7 +249,15 @@ func (c *ConfigPage) getPortFieldValue(label string) int {
 	return value
 }
 
-// showStatus displays a status message
+// setStatus updates the inline status text inside the form.
+func (c *ConfigPage) setStatus(message string) {
+	item := c.form.GetFormItemByLabel("状态")
+	if tv, ok := item.(*tview.TextView); ok {
+		tv.SetText(message)
+	}
+}
+
+// showStatus displays a status message (alias for setStatus)
 func (c *ConfigPage) showStatus(message string) {
-	c.statusText.SetText(message)
+	c.setStatus(message)
 }

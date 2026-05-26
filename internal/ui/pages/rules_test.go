@@ -12,39 +12,35 @@ import (
 	"github.com/rivo/tview"
 )
 
-// Compile-time check: verify Rules implements ActivatablePage.
-var _ ActivatablePage = (*Rules)(nil)
+// Compile-time check: verify RulesPage implements ActivatablePage.
+var _ ActivatablePage = (*RulesPage)(nil)
 
 func TestNewRules_NonNil(t *testing.T) {
 	r := NewRules()
 	if r == nil {
 		t.Fatal("NewRules() returned nil")
 	}
-	if r.RulesPage == nil {
-		t.Fatal("RulesPage is nil after NewRules()")
-	}
-
 	// Verify embedded Flex layout exists
-	if r.RulesPage.Flex == nil {
+	if r.Flex == nil {
 		t.Fatal("Flex layout is nil after NewRulesPage()")
 	}
 
 	// Verify sub-components are non-nil
-	if r.RulesPage.table == nil {
+	if r.table == nil {
 		t.Error("table should not be nil")
 	}
-	if r.RulesPage.searchInput == nil {
+	if r.searchInput == nil {
 		t.Error("searchInput should not be nil")
 	}
-	if r.RulesPage.statusText == nil {
+	if r.statusText == nil {
 		t.Error("statusText should not be nil")
 	}
-	if r.RulesPage.actionBar == nil {
+	if r.actionBar == nil {
 		t.Error("actionBar should not be nil")
 	}
 
 	// Verify title is set (from setupUI)
-	if title := r.RulesPage.GetTitle(); title == "" {
+	if title := r.GetTitle(); title == "" {
 		t.Error("page title should not be empty")
 	}
 }

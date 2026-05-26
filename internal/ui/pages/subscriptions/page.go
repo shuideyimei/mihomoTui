@@ -75,13 +75,17 @@ func (p *Page) setupUI() {
 	p.importForm = tview.NewForm()
 	p.importForm.SetBorder(true)
 	p.importForm.SetTitle(" 导入订阅 ")
+	p.importForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput = tview.NewInputField()
+	p.nameInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput.SetLabel("名称 ")
 	p.nameInput.SetFieldWidth(40)
 	p.urlInput = tview.NewInputField()
+	p.urlInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.urlInput.SetLabel("URL/路径 ")
 	p.urlInput.SetFieldWidth(60)
 	p.intervalInput = tview.NewInputField()
+	p.intervalInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.intervalInput.SetLabel("更新间隔(分) ")
 	p.intervalInput.SetText("1440")
 	p.intervalInput.SetFieldWidth(10)
@@ -93,6 +97,8 @@ func (p *Page) setupUI() {
 	p.importForm.AddButton(" 从本地导入 ", p.onImportLocal)
 	p.importForm.AddButton("  取消  ", p.onCancelImport)
 	p.importForm.SetButtonsAlign(tview.AlignCenter)
+	p.importForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	p.importForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 
 	leftPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	leftPanel.AddItem(p.subList, 0, 1, true)
@@ -111,6 +117,9 @@ func (p *Page) setupSubList() {
 	p.subList = tview.NewList()
 	p.subList.SetBorder(true)
 	p.subList.SetTitle(" mihomo 配置中的提供者 ")
+	p.subList.SetMainTextColor(tcell.ColorWhite)
+	p.subList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
+	p.subList.SetSelectedTextColor(tcell.ColorBlack)
 	p.subList.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 		switch ev.Key() {
 		case tcell.KeyCtrlD:
@@ -154,13 +163,24 @@ func (p *Page) setupSubList() {
 }
 
 func (p *Page) setupActionBar() {
+	btnStyle := tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite)
+	btnFocus := tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite)
+
 	refreshBtn := tview.NewButton("[R] 刷新")
+	refreshBtn.SetStyle(btnStyle)
+	refreshBtn.SetActivatedStyle(btnFocus)
 	refreshBtn.SetSelectedFunc(func() { go p.refresh() })
 	importBtn := tview.NewButton("[I] 导入")
+	importBtn.SetStyle(btnStyle)
+	importBtn.SetActivatedStyle(btnFocus)
 	importBtn.SetSelectedFunc(p.showImportForm)
 	updateBtn := tview.NewButton("[U] 更新")
+	updateBtn.SetStyle(btnStyle)
+	updateBtn.SetActivatedStyle(btnFocus)
 	updateBtn.SetSelectedFunc(func() { go p.updateSelected() })
 	deleteBtn := tview.NewButton("[D] 删除")
+	deleteBtn.SetStyle(btnStyle)
+	deleteBtn.SetActivatedStyle(btnFocus)
 	deleteBtn.SetSelectedFunc(func() { go p.deleteSelected() })
 
 	p.actionBar.AddItem(refreshBtn, 0, 1, false)

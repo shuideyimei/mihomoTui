@@ -17,23 +17,6 @@ import (
 	"github.com/rivo/tview"
 )
 
-// Proxies represents the proxies page
-type Proxies struct {
-	*ProxiesPage
-}
-
-// Activate activates the proxies page
-func (p *Proxies) Activate() {
-	log.Printf("Activating proxies page")
-	p.ProxiesPage.Activate()
-}
-
-// Deactivate deactivates the proxies page
-func (p *Proxies) Deactivate() {
-	log.Printf("Deactivating proxies page")
-	p.ProxiesPage.Deactivate()
-}
-
 // ProxiesPage represents the proxies management page
 type ProxiesPage struct {
 	*tview.Flex
@@ -71,10 +54,13 @@ type ProxiesPage struct {
 	isTestingDelay bool
 	lastUpdate     time.Time
 
+	// Guards isTestingDelay flag against concurrent reads/writes
+	delayMu sync.Mutex
+
 	// Navigation
 	focusableComponents []tview.Primitive
 	currentFocusIndex   int
-	buttonNav           *components.ButtonNavigator
+	buttonNav           *components.FocusNavigator
 	focusableButtons    []*tview.Button
 }
 
@@ -174,7 +160,8 @@ func (p *ProxiesPage) createStatusText() {
 // createSearchInput creates the search input for filtering nodes
 func (p *ProxiesPage) createSearchInput() {
 	p.searchInput = tview.NewInputField()
-	p.searchInput.SetLabel("🔍 ")
+	p.searchInput.SetFieldBackgroundColor(ui.ThemeInputBg)
+	p.searchInput.SetLabel("搜索: ")
 	p.searchInput.SetPlaceholder("搜索节点...")
 	p.searchInput.SetChangedFunc(func(text string) {
 		p.filterText = text
@@ -197,6 +184,15 @@ func (p *ProxiesPage) createGroupsList() {
 	p.groupsList = tview.NewList()
 	p.groupsList.SetBorder(true)
 	p.groupsList.SetTitle(" 代理组 ")
+	p.groupsList.SetMainTextColor(tcell.ColorWhite)
+	p.groupsList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
+	p.groupsList.SetSelectedTextColor(tcell.ColorBlack)
+	p.groupsList.SetFocusFunc(func() {
+		p.groupsList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
+	})
+	p.groupsList.SetBlurFunc(func() {
+		p.groupsList.SetSelectedBackgroundColor(ui.ThemeSelBgBlur)
+	})
 }
 
 // createSwitchButtons creates the mode switch buttons
@@ -212,11 +208,21 @@ func (p *ProxiesPage) createSwitchButtons() {
 
 	// Initialize button navigation
 	p.focusableButtons = []*tview.Button{p.ruleBtn, p.globalBtn, p.directBtn}
-	p.buttonNav = components.NewButtonNavigator()
-	p.buttonNav.SetButtons(p.focusableButtons)
+	p.buttonNav = components.NewFocusNavigator()
+	p.buttonNav.SetComponents([]tview.Primitive{
+		p.ruleBtn, p.globalBtn, p.directBtn,
+	})
 
 	// Set initial button styles
 	p.updateButtonStyles()
+
+	// Gray background, no light blue
+	p.ruleBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	p.ruleBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	p.globalBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	p.globalBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	p.directBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	p.directBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 
 	// Add button click handlers for mode switching
 	p.ruleBtn.SetSelectedFunc(func() {
@@ -247,24 +253,25 @@ func (p *ProxiesPage) createSwitchButtons() {
 	})
 }
 
-// updateButtonStyles updates button styles based on current mode
+// updateButtonStyles updates button labels based on current mode
 func (p *ProxiesPage) updateButtonStyles() {
-	// Reset all buttons to gray
-	style := tcell.StyleDefault.Background(tcell.ColorGray).Foreground(tcell.ColorWhite)
-	activatedStyle := tcell.StyleDefault.Background(tcell.ColorGreen).Foreground(tcell.ColorWhite)
-	p.ruleBtn.SetStyle(style)
-	p.globalBtn.SetStyle(style)
-	p.directBtn.SetStyle(style)
+	// Use plain text with ▶ indicator on active mode
+	rLabel := "Rule"
+	gLabel := "Global"
+	dLabel := "Direct"
 
-	// Highlight current mode
 	switch p.currentMode {
 	case "rule":
-		p.ruleBtn.SetStyle(activatedStyle)
+		rLabel = "▶ Rule"
 	case "global":
-		p.globalBtn.SetStyle(activatedStyle)
+		gLabel = "▶ Global"
 	case "direct":
-		p.directBtn.SetStyle(activatedStyle)
+		dLabel = "▶ Direct"
 	}
+
+	p.ruleBtn.SetLabel(rLabel)
+	p.globalBtn.SetLabel(gLabel)
+	p.directBtn.SetLabel(dLabel)
 }
 
 // syncModeFromStatusBar synchronizes mode state from StatusBar
@@ -300,7 +307,7 @@ func (p *ProxiesPage) createNodesList() {
 	headers := []string{"节点名称", "类型", "延迟", "状态"}
 	for i, header := range headers {
 		cell := tview.NewTableCell(header).
-			SetTextColor(tcell.ColorYellow).
+			SetTextColor(tcell.ColorGray).
 			SetAlign(tview.AlignCenter).
 			SetSelectable(false)
 		p.nodesList.SetCell(0, i, cell)
@@ -527,7 +534,7 @@ func (p *ProxiesPage) updateNodesListContent() {
 	headers := []string{"节点名称", "类型", "延迟", "状态"}
 	for i, header := range headers {
 		cell := tview.NewTableCell(header).
-			SetTextColor(tcell.ColorYellow).
+			SetTextColor(tcell.ColorGray).
 			SetAlign(tview.AlignCenter).
 			SetSelectable(false)
 		p.nodesList.SetCell(0, i, cell)
@@ -600,14 +607,13 @@ func (p *ProxiesPage) updateNodesListContent() {
 		switch name {
 		case "DIRECT":
 			typeText = "DIRECT"
-			typeColor = tcell.ColorGreen
+			typeColor = tcell.ColorWhite
 		case "REJECT", "REJECT-DROP", "REJECT-TLS":
 			typeText = name
-			typeColor = tcell.ColorRed
 		default:
 			if node, found := nodeLookup[name]; found {
 				typeText = strings.ToUpper(node.Type)
-				typeColor = tcell.ColorBlue
+				typeColor = tcell.ColorGray
 			}
 		}
 
@@ -616,8 +622,8 @@ func (p *ProxiesPage) updateNodesListContent() {
 			SetAlign(tview.AlignCenter)
 		p.nodesList.SetCell(row, 1, typeCell)
 
-		// Delay cell
-		delayText := "未测试"
+		// Delay cell — minimal 3-tier: white <100ms, gray <500ms, subdued for timeout
+		delayText := "-"
 		delayColor := tcell.ColorGray
 
 		// Check group delay data first
@@ -626,35 +632,35 @@ func (p *ProxiesPage) updateNodesListContent() {
 				if delay, ok := gd[name]; ok && delay > 0 {
 					delayText = fmt.Sprintf("%dms", delay)
 					if delay < 100 {
-						delayColor = tcell.ColorGreen
-					} else if delay < 300 {
-						delayColor = tcell.ColorYellow
+						delayColor = tcell.ColorWhite
+					} else if delay < 500 {
+						delayColor = tcell.ColorGray
 					} else {
-						delayColor = tcell.ColorRed
+						delayColor = tcell.ColorDarkGray
 					}
 				} else if delay == 0 {
 					delayText = "超时"
-					delayColor = tcell.ColorRed
+					delayColor = tcell.ColorDarkGray
 				}
 			}
 		}
 
 		// Fallback to node's own history
-		if delayText == "未测试" {
+		if delayText == "-" {
 			if node, found := nodeLookup[name]; found && len(node.History) > 0 {
 				lastDelay := node.History[len(node.History)-1].Delay
 				if lastDelay > 0 {
 					delayText = fmt.Sprintf("%dms", lastDelay)
 					if lastDelay < 100 {
-						delayColor = tcell.ColorGreen
-					} else if lastDelay < 300 {
-						delayColor = tcell.ColorYellow
+						delayColor = tcell.ColorWhite
+					} else if lastDelay < 500 {
+						delayColor = tcell.ColorGray
 					} else {
-						delayColor = tcell.ColorRed
+						delayColor = tcell.ColorDarkGray
 					}
 				} else {
 					delayText = "超时"
-					delayColor = tcell.ColorRed
+					delayColor = tcell.ColorDarkGray
 				}
 			}
 		}
@@ -664,21 +670,19 @@ func (p *ProxiesPage) updateNodesListContent() {
 			SetAlign(tview.AlignCenter)
 		p.nodesList.SetCell(row, 2, delayCell)
 
-		// Status cell
+		// Status cell — minimal
 		statusText := "-"
 		statusColor := tcell.ColorGray
 		switch name {
 		case "DIRECT", "REJECT", "REJECT-DROP", "REJECT-TLS":
 			statusText = "-"
-			statusColor = tcell.ColorGray
 		default:
 			if node, found := nodeLookup[name]; found {
 				if node.UDP {
 					statusText = "OK"
-					statusColor = tcell.ColorGreen
+					statusColor = tcell.ColorWhite
 				} else {
 					statusText = "TCP"
-					statusColor = tcell.ColorYellow
 				}
 			}
 		}
@@ -804,16 +808,21 @@ func (p *ProxiesPage) selectCurrentNode() {
 
 // testGroupDelay tests the delay of all nodes in the selected group
 func (p *ProxiesPage) testGroupDelay() {
+	p.delayMu.Lock()
 	if p.selectedGroup == "" || p.isTestingDelay {
+		p.delayMu.Unlock()
 		return
 	}
 
 	p.isTestingDelay = true
+	p.delayMu.Unlock()
 	p.showInfo("正在测试组内所有节点延迟...")
 
 	go func() {
 		defer func() {
+			p.delayMu.Lock()
 			p.isTestingDelay = false
+			p.delayMu.Unlock()
 		}()
 
 		delays, err := api.Client.TestGroupDelay(p.selectedGroup, "http://www.gstatic.com/generate_204", 3000)
@@ -840,16 +849,21 @@ func (p *ProxiesPage) testGroupDelay() {
 
 // testSelectedNodeDelay tests delay for the selected node using R shortcut
 func (p *ProxiesPage) testSelectedNodeDelay() {
+	p.delayMu.Lock()
 	if p.selectedNode == "" || p.isTestingDelay {
+		p.delayMu.Unlock()
 		return
 	}
 
 	p.isTestingDelay = true
+	p.delayMu.Unlock()
 	p.showInfo(fmt.Sprintf("正在测试 %s 延迟...", p.selectedNode))
 
 	go func() {
 		defer func() {
+			p.delayMu.Lock()
 			p.isTestingDelay = false
+			p.delayMu.Unlock()
 		}()
 
 		delay, err := api.Client.TestProxyDelay(p.selectedNode, "http://www.gstatic.com/generate_204", 5000)

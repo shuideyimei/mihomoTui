@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"mihomoTui/internal/parser"
 	"mihomoTui/internal/types"
 )
+
+const maxBodySize = 50 * 1024 * 1024 // 50 MB max download size
 
 type Manager struct {
 	httpClient *http.Client
@@ -27,15 +31,34 @@ func (m *Manager) ImportFromURL(ctx context.Context, subURL string) (*types.Conf
 		return nil, fmt.Errorf("URL is required")
 	}
 
+	// Validate URL to prevent SSRF attacks
+	parsed, err := url.Parse(subURL)
+	if err != nil {
+		return nil, fmt.Errorf("无效的 URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, fmt.Errorf("不支持的 URL 协议: %s (仅支持 http/https)", parsed.Scheme)
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "127.0.0.1" || host == "localhost" || host == "0.0.0.0" || host == "[::1]" ||
+		strings.HasPrefix(host, "10.") || strings.HasPrefix(host, "192.168.") ||
+		strings.HasPrefix(host, "172.") {
+		return nil, fmt.Errorf("URL 指向内网地址，已被拒绝: %s", host)
+	}
+
 	resp, err := m.downloadWithRetry(ctx, subURL, nil, 3)
 	if err != nil {
 		return nil, fmt.Errorf("下载失败: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	// Limit response body to prevent OOM from large responses
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize+1))
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
+	}
+	if len(body) > maxBodySize {
+		return nil, fmt.Errorf("响应体过大 (>50MB)")
 	}
 
 	doc, err := parser.Parse(body)

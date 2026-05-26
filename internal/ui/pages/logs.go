@@ -3,7 +3,6 @@ package pages
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -12,22 +11,9 @@ import (
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
-
-type Logs struct {
-	*LogsPage
-}
-
-func (l *Logs) Activate() {
-	log.Printf("Activating logs page")
-	l.LogsPage.Activate()
-}
-
-func (l *Logs) Deactivate() {
-	log.Printf("Deactivating logs page")
-	l.LogsPage.Deactivate()
-}
 
 type LogsPage struct {
 	*tview.Flex
@@ -79,8 +65,6 @@ func NewLogsPage() *LogsPage {
 }
 
 func (p *LogsPage) setupUI() {
-	p.textView.SetBorder(true)
-	p.textView.SetTitle(" 实时日志 ")
 	p.textView.SetDynamicColors(true)
 	p.textView.SetScrollable(true)
 
@@ -110,11 +94,17 @@ func (p *LogsPage) setupUI() {
 		})
 	p.levelDropdown.SetCurrentOption(0)
 	p.levelDropdown.SetLabel("Level: ")
+	p.levelDropdown.SetFieldBackgroundColor(ui.ThemeInputBg)
+	p.levelDropdown.SetListStyles(
+		tcell.StyleDefault.Background(tcell.ColorDarkGray).Foreground(tcell.ColorWhite),
+		tcell.StyleDefault.Background(ui.ThemeHighlightBg).Foreground(tcell.ColorBlack),
+	)
 
 	// Search input
 	p.searchInput = tview.NewInputField().
 		SetLabel("Search: ").
 		SetFieldWidth(20)
+	p.searchInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.searchInput.SetChangedFunc(func(text string) {
 		p.mu.Lock()
 		p.searchText = text
@@ -123,13 +113,17 @@ func (p *LogsPage) setupUI() {
 	})
 
 	// Pause/Resume button
-	p.pauseBtn = tview.NewButton("⏸ Pause")
+	p.pauseBtn = tview.NewButton("[Pause]")
+	p.pauseBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	p.pauseBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	p.pauseBtn.SetSelectedFunc(func() {
 		p.togglePause()
 	})
 
 	// Clear button
 	p.clearBtn = tview.NewButton("Clear")
+	p.clearBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	p.clearBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	p.clearBtn.SetSelectedFunc(func() {
 		p.Clear()
 	})
@@ -146,6 +140,9 @@ func (p *LogsPage) setupUI() {
 	p.SetDirection(tview.FlexRow)
 	p.AddItem(controlBar, 1, 0, false)
 	p.AddItem(p.textView, 0, 1, true)
+
+	p.SetBorder(true)
+	p.SetTitle(" 实时日志 ")
 }
 
 func (p *LogsPage) onLevelChanged() {
@@ -163,7 +160,7 @@ func (p *LogsPage) onLevelChanged() {
 		p.mu.Lock()
 		p.isPaused = true
 		p.mu.Unlock()
-		p.pauseBtn.SetLabel("▶ Resume")
+		p.pauseBtn.SetLabel("[Resume]")
 	} else {
 		p.startLogStream()
 	}
@@ -180,13 +177,13 @@ func (p *LogsPage) togglePause() {
 			p.cancel()
 		}
 		p.ctx, p.cancel = context.WithCancel(context.Background())
-		p.pauseBtn.SetLabel("⏸ Pause")
+		p.pauseBtn.SetLabel("[Pause]")
 		p.startLogStream()
 	} else {
 		if p.cancel != nil {
 			p.cancel()
 		}
-		p.pauseBtn.SetLabel("▶ Resume")
+		p.pauseBtn.SetLabel("[Resume]")
 	}
 }
 
@@ -275,10 +272,12 @@ func (p *LogsPage) addLog(logText string) {
 }
 
 func (p *LogsPage) updateTextView() {
-	content := ""
+	var b strings.Builder
 	for _, line := range p.logs {
-		content += line + "\n"
+		b.WriteString(line)
+		b.WriteByte('\n')
 	}
+	content := b.String()
 	ui.Updater.PostUi(func() {
 		p.textView.SetText(content)
 	})
@@ -292,23 +291,27 @@ func (p *LogsPage) refreshDisplay() {
 	p.mu.Unlock()
 
 	if search == "" {
-		content := ""
+		var b strings.Builder
 		for _, line := range logsCopy {
-			content += line + "\n"
+			b.WriteString(line)
+			b.WriteByte('\n')
 		}
+		content := b.String()
 		ui.Updater.PostUi(func() {
 			p.textView.SetText(content)
 		})
 		return
 	}
 
-	content := ""
+	var b strings.Builder
 	for _, line := range logsCopy {
 		lower := strings.ToLower(line)
 		if strings.Contains(lower, search) {
-			content += line + "\n"
+			b.WriteString(line)
+			b.WriteByte('\n')
 		}
 	}
+	content := b.String()
 	ui.Updater.PostUi(func() {
 		p.textView.SetText(content)
 	})

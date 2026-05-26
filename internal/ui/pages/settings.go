@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/ui"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -29,6 +30,9 @@ func newSettingsPage(cm *config.Manager, appName, appVersion string) *Settings {
 	s.AddItem(s.buildUpdateSection(), 0, 1, false)
 	s.AddItem(s.buildAboutSection(appName, appVersion), 0, 1, false)
 
+	s.SetBorder(true)
+	s.SetTitle(" 设置 ")
+
 	return s
 }
 
@@ -40,6 +44,8 @@ func (s *Settings) buildBackupSection() *tview.Flex {
 
 	s.backupBtn = tview.NewButton("备份配置")
 	s.backupBtn.SetBorder(true)
+	s.backupBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	s.backupBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	s.backupBtn.SetSelectedFunc(func() {
 		if err := s.configManager.Backup(); err != nil {
 			s.showStatus(fmt.Sprintf("[red]备份失败: %s[-]", err.Error()))
@@ -50,6 +56,8 @@ func (s *Settings) buildBackupSection() *tview.Flex {
 
 	s.restoreBtn = tview.NewButton("恢复配置")
 	s.restoreBtn.SetBorder(true)
+	s.restoreBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
+	s.restoreBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
 	s.restoreBtn.SetSelectedFunc(func() {
 		if err := s.configManager.Restore(); err != nil {
 			s.showStatus(fmt.Sprintf("[red]恢复失败: %s[-]", err.Error()))

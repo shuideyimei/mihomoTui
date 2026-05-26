@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"mihomoTui/internal/types"
@@ -78,11 +79,11 @@ func ExtractProxiesFromText(text string) []string {
 func extractProxyNames(text string) []string {
 	// Simple line-by-line extraction; in production would use regex
 	// This is used by proxy group import for reading proxy lists from user input
-	lines := splitLines(text)
+	lines := strings.Split(text, "\n")
 	var names []string
 	for _, line := range lines {
-		line = trimSpace(line)
-		if line != "" && !startsWith(line, "#") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") {
 			names = append(names, line)
 		}
 	}

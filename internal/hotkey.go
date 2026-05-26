@@ -21,8 +21,8 @@ func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 		return nil
 	}
 
-	// Handle Escape key to return to sidebar (only when not on sidebar)
-	if event.Key() == tcell.KeyEscape && !a.focusOnSidebar {
+	// Handle Escape key to return to navigation bar (only when not on navbar)
+	if event.Key() == tcell.KeyEscape && !a.focusOnNav {
 		a.setFocus(true)
 		return nil
 	}

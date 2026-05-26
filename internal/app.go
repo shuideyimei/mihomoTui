@@ -20,8 +20,8 @@ type App struct {
 	configManager *config.Manager
 	subMgr        *subscription.Manager
 
-	header    *components.Header
-	sidebar   *components.Sidebar
+	header  *components.Header
+	navBar  *components.NavBar
 	statusBar *components.StatusBar
 	content   tview.Primitive
 
@@ -32,7 +32,7 @@ type App struct {
 	pageNames    []string
 	currentPage  int
 
-	focusOnSidebar bool
+	focusOnNav bool
 	showingHelp    bool
 	appName        string
 	appVersion     string
@@ -43,7 +43,7 @@ func NewApp(appName, appVersion string) *App {
 	return &App{
 		app:            tview.NewApplication(),
 		pageNames:      []string{"dashboard", "proxies", "connections", "config", "logs", "subscriptions", "proxygroups", "rules", "ruleproviders", "settings", "configmgr"},
-		focusOnSidebar: true,
+		focusOnNav: true,
 		appName:        appName,
 		appVersion:     appVersion,
 	}
@@ -58,6 +58,9 @@ func (a *App) Initialize() error {
 	}
 	// Set application
 	ui.InitUpdater(a.app)
+
+	// Initialize global theme (border colors, etc.)
+	ui.InitTheme()
 
 	// Initialize API client
 	cfg := a.configManager.GetAPI()
@@ -79,11 +82,21 @@ func (a *App) Initialize() error {
 	return nil
 }
 
+// setFocus sets focus to either navbar or content
+func (a *App) setFocus(toNav bool) {
+	a.focusOnNav = toNav
+	if toNav {
+		a.app.SetFocus(a.navBar)
+	} else {
+		a.app.SetFocus(a.content)
+	}
+}
+
 // setupUI initializes the user interface
 func (a *App) setupUI() {
 	// Create components
 	a.header = components.NewHeader(a.appName, a.appVersion)
-	a.sidebar = components.NewSidebar()
+	a.navBar = components.NewNavBar()
 	a.statusBar = components.NewStatusBar()
 
 	// Create pages
@@ -93,13 +106,16 @@ func (a *App) setupUI() {
 	// Set initial content
 	a.content = a.pages
 
-	// Setup sidebar selection handler
-	a.sidebar.SetOnSelect(func(index int, label string) {
+	// Setup navigation bar selection handler
+	a.navBar.SetOnSelect(func(index int, label string) {
 		a.switchPage(index)
 	})
 
 	// Create layouts
 	a.setupLayouts()
+
+	// Give initial focus to navbar
+	a.app.SetFocus(a.navBar)
 
 	a.rootPages = tview.NewPages()
 	a.rootPages.AddPage("main", a.rootLayout, true, true)
@@ -112,9 +128,6 @@ func (a *App) setupUI() {
 
 	// Set global key handlers
 	a.app.SetInputCapture(a.handleGlobalKeys)
-
-	// Set initial focus to sidebar
-	a.setFocus(true)
 
 	// Set StatusBar reference in UI Updater
 	ui.Updater.SetStatusBar(a.statusBar)
@@ -168,25 +181,23 @@ func (a *App) setupPages() {
 
 // setupLayouts creates the application layout
 func (a *App) setupLayouts() {
-	// Main layout (sidebar + content)
+	// Main layout (content full width)
 	a.mainLayout = tview.NewFlex().
-		AddItem(a.sidebar, 12, 0, true).
 		AddItem(a.content, 0, 1, false)
 
-	// Root layout (header + main + status)
+	// Root layout (header + navbar + content + status)
 	a.rootLayout = tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(a.header, 3, 0, false).
-		AddItem(a.mainLayout, 0, 1, true).
-		AddItem(a.statusBar, 3, 0, false)
+		AddItem(a.header, 2, 0, false).
+		AddItem(a.navBar, 1, 0, true).
+		AddItem(a.mainLayout, 0, 1, false).
+		AddItem(a.statusBar, 2, 0, false)
 }
 
-// basicInitData initializes basic application data
+// basicInitData initializes basic application data.
+// Called via go routine from Initialize() so all calls here are already async.
 func (a *App) basicInitData() {
-	// Initial connection check
-	go a.header.SetHeaderInfo()
-
-	// Update status bar
-	go a.statusBar.Active()
+	a.header.SetHeaderInfo()
+	a.statusBar.Active()
 }
 
 // switchPage switches to a specific page
@@ -201,7 +212,7 @@ func (a *App) switchPage(index int) {
 			a.currentPage = index
 			pageName := a.pageNames[index]
 			a.pages.SwitchToPage(pageName)
-			a.sidebar.SelectItem(index)
+			a.navBar.SelectItem(index)
 
 			// Activate new page if it's activatable
 			a.activatePage(pageName)
@@ -232,15 +243,7 @@ func (a *App) deactivatePage(pageName string) {
 	}
 }
 
-// setFocus sets focus to either sidebar or content
-func (a *App) setFocus(toSidebar bool) {
-	a.focusOnSidebar = toSidebar
-	if toSidebar {
-		a.app.SetFocus(a.sidebar)
-	} else {
-		a.app.SetFocus(a.content)
-	}
-}
+
 
 // Run starts the application
 func (a *App) Run() error {
@@ -250,11 +253,7 @@ func (a *App) Run() error {
 
 // Stop stops the application
 func (a *App) Stop() {
-	a.app.Suspend(func() {
-		a.app.Stop()
-	})
-
-	// Deactivate current page if it's activatable
+	// Deactivate current page BEFORE stopping the UI goroutine
 	if a.currentPage >= 0 && a.currentPage < len(a.pageNames) {
 		currentPageName := a.pageNames[a.currentPage]
 		if currentPageName != "" {
@@ -262,4 +261,7 @@ func (a *App) Stop() {
 		}
 	}
 
+	a.app.Suspend(func() {
+		a.app.Stop()
+	})
 }

@@ -11,8 +11,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-// Compile-time checks: verify Proxies and ProxiesPage implement ActivatablePage.
-var _ ActivatablePage = (*Proxies)(nil)
+// Compile-time check: verify ProxiesPage implements ActivatablePage.
 var _ ActivatablePage = (*ProxiesPage)(nil)
 
 func TestNewProxies_NonNil(t *testing.T) {
@@ -20,34 +19,30 @@ func TestNewProxies_NonNil(t *testing.T) {
 	if p == nil {
 		t.Fatal("NewProxies() returned nil")
 	}
-	if p.ProxiesPage == nil {
-		t.Fatal("ProxiesPage is nil after NewProxies()")
-	}
-
-	// Verify Flex layout exists (embedded via ProxiesPage)
-	if p.ProxiesPage.Flex == nil {
+	// Verify Flex layout exists (embedded via NewProxiesPage now returns *ProxiesPage)
+	if p.Flex == nil {
 		t.Fatal("Flex layout is nil after NewProxiesPage()")
 	}
 
 	// Verify all layout sub-components are non-nil
-	if p.ProxiesPage.groupsList == nil {
+	if p.groupsList == nil {
 		t.Error("groupsList should not be nil")
 	}
-	if p.ProxiesPage.switchButtons == nil {
+	if p.switchButtons == nil {
 		t.Error("switchButtons should not be nil")
 	}
-	if p.ProxiesPage.nodesList == nil {
+	if p.nodesList == nil {
 		t.Error("nodesList should not be nil")
 	}
-	if p.ProxiesPage.statusText == nil {
+	if p.statusText == nil {
 		t.Error("statusText should not be nil")
 	}
-	if p.ProxiesPage.searchInput == nil {
+	if p.searchInput == nil {
 		t.Error("searchInput should not be nil")
 	}
 
 	// Verify title is set (from setupLayout)
-	if title := p.ProxiesPage.GetTitle(); title == "" {
+	if title := p.GetTitle(); title == "" {
 		t.Error("page title should not be empty")
 	}
 }

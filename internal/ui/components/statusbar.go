@@ -35,11 +35,11 @@ func NewStatusBar() *StatusBar {
 
 // setupStyle configures the status bar appearance
 func (s *StatusBar) setupStyle() {
-	s.SetBorder(true)
 	s.SetBorderPadding(0, 0, 1, 1)
 	s.SetTextAlign(tview.AlignLeft)
 	s.SetDynamicColors(true)
 	s.SetWrap(false)
+	s.SetBackgroundColor(ui.ThemeStatusBarBg)
 }
 
 func (s *StatusBar) Active() {
@@ -124,6 +124,19 @@ func (s *StatusBar) updateContent() {
 		mode = s.config.Mode
 	}
 
+	// Mode color tag
+	var modeTag string
+	switch mode {
+	case "rule":
+		modeTag = ui.ThemeTagModeRule
+	case "global":
+		modeTag = ui.ThemeTagModeGlobal
+	case "direct":
+		modeTag = ui.ThemeTagModeDirect
+	default:
+		modeTag = "[white]"
+	}
+
 	// Traffic
 	var upSpeed, downSpeed string
 	if s.traffic != nil {
@@ -134,11 +147,8 @@ func (s *StatusBar) updateContent() {
 		downSpeed = "- B/s"
 	}
 
-	// Help text with new shortcuts
-	helpText := "[gray]F1-F9/Ctrl+1-9切换标签页 | ESC返回侧边栏 | Ctrl+C/Q退出 | Ctrl+R刷新[white]"
-
-	content = fmt.Sprintf("模式: [yellow]%s[white] | U: [green]%s[white]  D: [blue]%s[white]  %s",
-		mode, upSpeed, downSpeed, helpText)
+	content = fmt.Sprintf("%s%s[white] | ↑ [green]%s[white]  ↓ [green]%s[white]  [gray]?帮助[-]",
+		modeTag, mode, upSpeed, downSpeed)
 
 	s.SetText(content)
 }

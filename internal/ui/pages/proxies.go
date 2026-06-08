@@ -19,6 +19,8 @@ import (
 	"github.com/rivo/tview"
 )
 
+const proxyNodesHeaderRows = 1
+
 // ProxiesPage represents the proxies management page
 type ProxiesPage struct {
 	*tview.Flex
@@ -320,7 +322,13 @@ func (p *ProxiesPage) createNodesList() {
 func (p *ProxiesPage) setupEventHandlers() {
 	// Groups list selection handler
 	p.groupsList.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		p.selectedGroup = extractGroupName(mainText)
+		p.mutex.RLock()
+		if index >= 0 && index < len(p.proxyGroups) && p.proxyGroups[index] != nil {
+			p.selectedGroup = p.proxyGroups[index].Name
+		} else {
+			p.selectedGroup = extractGroupName(mainText)
+		}
+		p.mutex.RUnlock()
 		p.updateNodesListContent()
 	})
 
@@ -468,6 +476,8 @@ func (p *ProxiesPage) sortGroups(groups []*models.Proxy) []*models.Proxy {
 func (p *ProxiesPage) updateGroupsList() {
 	groups := p.extractGroups()
 	groups = p.sortGroups(groups)
+	previousGroup := p.selectedGroup
+	itemOffset, horizontalOffset := p.groupsList.GetOffset()
 
 	p.mutex.Lock()
 	p.proxyGroups = groups
@@ -486,11 +496,47 @@ func (p *ProxiesPage) updateGroupsList() {
 	}
 
 	if len(groups) > 0 {
-		p.groupsList.SetCurrentItem(0)
-		// Get the selected group name from the groupsList item
-		mainText, _ := p.groupsList.GetItemText(0)
-		p.selectedGroup = extractGroupName(mainText)
+		selectedIndex := 0
+		for i, group := range groups {
+			if group != nil && sameProxyName(group.Name, previousGroup) {
+				selectedIndex = i
+				break
+			}
+		}
+		if itemOffset > selectedIndex {
+			selectedIndex = itemOffset
+			if selectedIndex >= len(groups) {
+				selectedIndex = len(groups) - 1
+			}
+		}
+		p.selectedGroup = groups[selectedIndex].Name
+		p.groupsList.SetCurrentItem(selectedIndex)
+		p.groupsList.SetOffset(itemOffset, horizontalOffset)
 		p.updateNodesListContent()
+	} else {
+		p.selectedGroup = ""
+		p.selectedNode = ""
+		p.nodesList.Clear()
+	}
+}
+
+func (p *ProxiesPage) updateCurrentGroupListItem() {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	for index, group := range p.proxyGroups {
+		if group == nil || !sameProxyName(group.Name, p.selectedGroup) {
+			continue
+		}
+
+		secondaryText := ""
+		if group.Now != "" {
+			secondaryText = fmt.Sprintf(i18n.T("proxy.current"), ui.StripFlagEmoji(group.Now))
+		}
+
+		mainText, _ := p.groupsList.GetItemText(index)
+		p.groupsList.SetItemText(index, mainText, secondaryText)
+		return
 	}
 }
 
@@ -501,6 +547,13 @@ func extractGroupName(mainText string) string {
 		return mainText[idx+2:]
 	}
 	return mainText
+}
+
+func sameProxyName(left, right string) bool {
+	if left == right {
+		return true
+	}
+	return ui.StripFlagEmoji(left) == ui.StripFlagEmoji(right)
 }
 
 // updateNodesListContent updates the nodes list content from the selected group's All list
@@ -530,6 +583,18 @@ func (p *ProxiesPage) updateNodesListContent() {
 	log.Printf("updateNodesListContent: group %q type=%s all=%v now=%q",
 		p.selectedGroup, selectedGroupProxy.Type, selectedGroupProxy.All, selectedGroupProxy.Now)
 
+	rowOffset, columnOffset := p.nodesList.GetOffset()
+	previousNode := p.selectedNode
+	if row, _ := p.nodesList.GetSelection(); row > 0 {
+		if cell := p.nodesList.GetCell(row, 0); cell != nil {
+			if ref := cell.GetReference(); ref != nil {
+				if nodeName, ok := ref.(string); ok {
+					previousNode = nodeName
+				}
+			}
+		}
+	}
+
 	p.nodesList.Clear()
 
 	// Re-add headers
@@ -556,12 +621,14 @@ func (p *ProxiesPage) updateNodesListContent() {
 		p.nodesList.SetCell(1, 1, tview.NewTableCell("-").SetTextColor(tcell.ColorGray).SetAlign(tview.AlignCenter))
 		p.nodesList.SetCell(1, 2, tview.NewTableCell("-").SetTextColor(tcell.ColorGray).SetAlign(tview.AlignCenter))
 		p.nodesList.SetCell(1, 3, tview.NewTableCell("-").SetTextColor(tcell.ColorGray).SetAlign(tview.AlignCenter))
+		p.nodesList.SetOffset(rowOffset, columnOffset)
 		return
 	}
 
 	// Display each entry in the group's All list
 	row := 1
 	firstNode := ""
+	selectedRow := 0
 	for _, name := range allNodes {
 		// Filter by search text (case-insensitive), matching name, type, and status
 		if p.filterText != "" {
@@ -589,6 +656,9 @@ func (p *ProxiesPage) updateNodesListContent() {
 
 		if firstNode == "" {
 			firstNode = name
+		}
+		if sameProxyName(name, previousNode) {
+			selectedRow = row
 		}
 
 		// Name cell
@@ -698,8 +768,19 @@ func (p *ProxiesPage) updateNodesListContent() {
 
 	// Select first node
 	if row > 1 {
-		p.nodesList.Select(1, 0)
-		p.selectedNode = firstNode
+		if selectedRow == 0 {
+			selectedRow = 1
+			p.selectedNode = firstNode
+		}
+		firstVisibleRow := proxyNodesHeaderRows + rowOffset
+		if firstVisibleRow > selectedRow {
+			selectedRow = firstVisibleRow
+			if selectedRow >= row {
+				selectedRow = row - 1
+			}
+		}
+		p.nodesList.Select(selectedRow, 0)
+		p.nodesList.SetOffset(rowOffset, columnOffset)
 	}
 }
 
@@ -802,7 +883,7 @@ func (p *ProxiesPage) selectCurrentNode() {
 
 		// Update UI to reflect the change
 		ui.Updater.PostUi(func() {
-			p.updateGroupsList()
+			p.updateCurrentGroupListItem()
 			p.updateNodesListContent()
 		})
 	}()

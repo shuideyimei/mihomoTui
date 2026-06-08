@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
 
 	"github.com/gdamore/tcell/v2"
@@ -98,4 +99,138 @@ func TestProxies_DeactivateNoPanic(t *testing.T) {
 
 	// Deactivate without calling Activate first — should not panic.
 	p.Deactivate()
+}
+
+func TestProxies_UpdateGroupsListPreservesSelection(t *testing.T) {
+	p := NewProxies()
+	p.proxiesData = map[string]*models.Proxy{
+		"Proxy": {Name: "Proxy", Type: "Selector", All: []string{"A", "B"}, Now: "A"},
+		"Auto":  {Name: "Auto", Type: "URLTest", All: []string{"A", "B"}, Now: "B"},
+	}
+	p.selectedGroup = "Auto"
+
+	p.updateGroupsList()
+
+	if got := p.selectedGroup; got != "Auto" {
+		t.Fatalf("selectedGroup = %q, want Auto", got)
+	}
+	if got := p.groupsList.GetCurrentItem(); got != 1 {
+		t.Fatalf("current group index = %d, want 1", got)
+	}
+}
+
+func TestProxies_UpdateGroupsListPreservesOffset(t *testing.T) {
+	p := NewProxies()
+	p.proxiesData = map[string]*models.Proxy{
+		"Proxy": {Name: "Proxy", Type: "Selector", All: []string{"A"}, Now: "A"},
+		"Auto":  {Name: "Auto", Type: "URLTest", All: []string{"A"}, Now: "A"},
+		"Group": {Name: "Group", Type: "Selector", All: []string{"A"}, Now: "A"},
+	}
+	p.selectedGroup = "Group"
+	p.groupsList.SetOffset(2, 1)
+
+	p.updateGroupsList()
+
+	itemOffset, horizontalOffset := p.groupsList.GetOffset()
+	if itemOffset != 2 || horizontalOffset != 1 {
+		t.Fatalf("group offset = (%d, %d), want (2, 1)", itemOffset, horizontalOffset)
+	}
+}
+
+func TestProxies_UpdateGroupsListMovesSelectionToScrolledViewport(t *testing.T) {
+	p := NewProxies()
+	p.proxiesData = map[string]*models.Proxy{
+		"Proxy": {Name: "Proxy", Type: "Selector", All: []string{"A"}, Now: "A"},
+		"Auto":  {Name: "Auto", Type: "URLTest", All: []string{"A"}, Now: "A"},
+		"Beta":  {Name: "Beta", Type: "Selector", All: []string{"A"}, Now: "A"},
+	}
+	p.selectedGroup = "Proxy"
+	p.groupsList.SetOffset(2, 0)
+
+	p.updateGroupsList()
+
+	if got := p.groupsList.GetCurrentItem(); got != 2 {
+		t.Fatalf("current group index = %d, want first visible index 2", got)
+	}
+	if got := p.selectedGroup; got != "Beta" {
+		t.Fatalf("selectedGroup = %q, want Beta", got)
+	}
+}
+
+func TestProxies_UpdateNodesListContentPreservesSelection(t *testing.T) {
+	p := NewProxies()
+	p.proxyGroups = []*models.Proxy{
+		{Name: "Proxy", Type: "Selector", All: []string{"A", "B", "C"}, Now: "A"},
+	}
+	p.proxiesData = map[string]*models.Proxy{
+		"A": {Name: "A", Type: "ss"},
+		"B": {Name: "B", Type: "ss"},
+		"C": {Name: "C", Type: "ss"},
+	}
+	p.selectedGroup = "Proxy"
+	p.selectedNode = "C"
+
+	p.updateNodesListContent()
+
+	row, _ := p.nodesList.GetSelection()
+	if row != 3 {
+		t.Fatalf("selected node row = %d, want 3", row)
+	}
+	if got := p.selectedNode; got != "C" {
+		t.Fatalf("selectedNode = %q, want C", got)
+	}
+}
+
+func TestProxies_UpdateNodesListContentPreservesOffset(t *testing.T) {
+	p := NewProxies()
+	p.proxyGroups = []*models.Proxy{
+		{Name: "Proxy", Type: "Selector", All: []string{"A", "B", "C", "D"}, Now: "A"},
+	}
+	p.proxiesData = map[string]*models.Proxy{
+		"A": {Name: "A", Type: "ss"},
+		"B": {Name: "B", Type: "ss"},
+		"C": {Name: "C", Type: "ss"},
+		"D": {Name: "D", Type: "ss"},
+	}
+	p.selectedGroup = "Proxy"
+	p.selectedNode = "C"
+	p.nodesList.SetOffset(2, 1)
+
+	p.updateNodesListContent()
+
+	rowOffset, columnOffset := p.nodesList.GetOffset()
+	if rowOffset != 2 || columnOffset != 1 {
+		t.Fatalf("node offset = (%d, %d), want (2, 1)", rowOffset, columnOffset)
+	}
+}
+
+func TestProxies_UpdateNodesListContentMovesSelectionToScrolledViewport(t *testing.T) {
+	p := NewProxies()
+	p.proxyGroups = []*models.Proxy{
+		{Name: "Proxy", Type: "Selector", All: []string{"A", "B", "C", "D"}, Now: "A"},
+	}
+	p.proxiesData = map[string]*models.Proxy{
+		"A": {Name: "A", Type: "ss"},
+		"B": {Name: "B", Type: "ss"},
+		"C": {Name: "C", Type: "ss"},
+		"D": {Name: "D", Type: "ss"},
+	}
+	p.selectedGroup = "Proxy"
+	p.selectedNode = "A"
+	p.nodesList.Select(1, 0)
+	p.nodesList.SetOffset(2, 0)
+
+	p.updateNodesListContent()
+
+	row, _ := p.nodesList.GetSelection()
+	if row != 3 {
+		t.Fatalf("selected node row = %d, want first visible row 3", row)
+	}
+	if got := p.selectedNode; got != "C" {
+		t.Fatalf("selectedNode = %q, want C", got)
+	}
+	rowOffset, columnOffset := p.nodesList.GetOffset()
+	if rowOffset != 2 || columnOffset != 0 {
+		t.Fatalf("node offset = (%d, %d), want (2, 0)", rowOffset, columnOffset)
+	}
 }

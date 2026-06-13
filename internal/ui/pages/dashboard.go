@@ -77,14 +77,12 @@ func (d *DashboardPage) setupLayout() {
 	// Create right column (control panel + operation status)
 	rightCol := tview.NewFlex().SetDirection(tview.FlexRow)
 	rightCol.AddItem(d.controlButtons, 0, 1, true)
-	rightCol.AddItem(d.operationStatus, 3, 0, false) // Fixed height for status
+	rightCol.AddItem(d.operationStatus, 1, 0, false)
 
-	// Main layout
-	d.SetDirection(tview.FlexColumn)
-	d.AddItem(leftCol, 0, 3, false)
-	d.AddItem(rightCol, 0, 2, true)
+	d.SetDirection(tview.FlexRow)
+	d.AddItem(components.NewResponsiveSplit(leftCol, rightCol, 96, 3, 2), 0, 1, true)
 
-	d.SetBorder(true)
+	d.SetBorder(false)
 	d.SetTitle(fmt.Sprintf(" %s ", i18n.T("dash.title")))
 }
 
@@ -117,15 +115,13 @@ func (d *DashboardPage) createControlButtons() {
 	buttonsRow := tview.NewFlex().SetDirection(tview.FlexColumn)
 
 	// Create AllowLAN button
-	d.allowLanBtn = tview.NewButton("○ AllowLAN")
-	d.allowLanBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorGray))
-	d.allowLanBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorGray))
+	d.allowLanBtn = tview.NewButton(i18n.T("dash.allow_lan_off"))
+	components.StyleButton(d.allowLanBtn, components.ButtonNormal)
 	d.allowLanBtn.SetSelectedFunc(d.toggleAllowLan)
 
 	// Create TUN button
-	d.tunBtn = tview.NewButton("○ TUN")
-	d.tunBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorGray))
-	d.tunBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorGray))
+	d.tunBtn = tview.NewButton(i18n.T("dash.tun_off"))
+	components.StyleButton(d.tunBtn, components.ButtonNormal)
 	d.tunBtn.SetSelectedFunc(d.toggleTun)
 
 	// Initialize button navigation
@@ -162,9 +158,7 @@ func (d *DashboardPage) createControlButtons() {
 // createOperationStatus creates the operation status bar
 func (d *DashboardPage) createOperationStatus() {
 	d.operationStatus = tview.NewTextView()
-	d.operationStatus.SetBorder(true)
-	d.operationStatus.SetTitle(fmt.Sprintf(" %s ", i18n.T("dash.control_panel")))
-	d.operationStatus.SetDynamicColors(true)
+	components.StyleStatusLine(d.operationStatus)
 	d.operationStatus.SetText(i18n.T("dash.status_ready"))
 }
 
@@ -283,21 +277,21 @@ func (d *DashboardPage) updateControlButtons() {
 	ui.Updater.PostUi(func() {
 		// AllowLAN toggle: ● ON / ○ OFF with brightness
 		if on {
-			d.allowLanBtn.SetLabel("● AllowLAN")
+			d.allowLanBtn.SetLabel(i18n.T("dash.allow_lan_on"))
 			d.allowLanBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-			d.allowLanBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+			d.allowLanBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorBlack))
 		} else {
-			d.allowLanBtn.SetLabel("○ AllowLAN")
+			d.allowLanBtn.SetLabel(i18n.T("dash.allow_lan_off"))
 			d.allowLanBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorGray))
 			d.allowLanBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorGray))
 		}
 		// TUN toggle: ● ON / ○ OFF with brightness
 		if tunOn {
-			d.tunBtn.SetLabel("● TUN")
+			d.tunBtn.SetLabel(i18n.T("dash.tun_on"))
 			d.tunBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-			d.tunBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+			d.tunBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorBlack))
 		} else {
-			d.tunBtn.SetLabel("○ TUN")
+			d.tunBtn.SetLabel(i18n.T("dash.tun_off"))
 			d.tunBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorGray))
 			d.tunBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorGray))
 		}

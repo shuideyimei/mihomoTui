@@ -12,6 +12,7 @@ import (
 	subscriptionspage "mihomoTui/internal/ui/pages/subscriptions"
 	"sync"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -34,10 +35,13 @@ type App struct {
 	content   tview.Primitive
 
 	rootLayout    *tview.Flex
+	bodyLayout    *tview.Flex
 	rootPages     *tview.Pages
 	mainLayout    *tview.Flex
 	pages         *tview.Pages
+	helpPage      tview.Primitive
 	pageNames     []string
+	pageInfo      []ui.PageInfo
 	currentPage   int
 	pageLifecycle map[string]pages.ActivatablePage
 
@@ -46,17 +50,26 @@ type App struct {
 	lifecycleStop  bool
 	stopOnce       sync.Once
 
-	focusOnNav  bool
-	showingHelp bool
-	appName     string
-	appVersion  string
+	focusOnNav         bool
+	showingHelp        bool
+	showingPalette     bool
+	helpReturnFocus    tview.Primitive
+	paletteReturnFocus tview.Primitive
+	appName            string
+	appVersion         string
 }
 
 // NewApp creates a new application instance
 func NewApp(appName, appVersion string) *App {
+	pageInfo := ui.DefaultPageInfo()
+	pageNames := make([]string, len(pageInfo))
+	for index, item := range pageInfo {
+		pageNames[index] = item.ID
+	}
 	return &App{
 		app:            tview.NewApplication(),
-		pageNames:      []string{"dashboard", "proxies", "connections", "config", "logs", "subscriptions", "proxygroups", "rules", "ruleproviders", "settings", "configmgr"},
+		pageNames:      pageNames,
+		pageInfo:       pageInfo,
 		pageLifecycle:  make(map[string]pages.ActivatablePage),
 		lifecycleQueue: make(chan lifecycleTransition, 64),
 		focusOnNav:     true,
@@ -116,7 +129,7 @@ func (a *App) setFocus(toNav bool) {
 func (a *App) setupUI() {
 	// Create components
 	a.header = components.NewHeader(a.appName, a.appVersion)
-	a.navBar = components.NewNavBar()
+	a.navBar = components.NewNavBar(a.pageInfo)
 	a.statusBar = components.NewStatusBar()
 
 	// Create pages
@@ -139,7 +152,8 @@ func (a *App) setupUI() {
 
 	a.rootPages = tview.NewPages()
 	a.rootPages.AddPage("main", a.rootLayout, true, true)
-	a.rootPages.AddPage("help", pages.NewHelpPage(), true, false)
+	a.helpPage = pages.NewHelpPage(a.pageInfo)
+	a.rootPages.AddPage("help", a.helpPage, true, false)
 
 	// Configure application
 	a.app.SetRoot(a.rootPages, true)
@@ -148,9 +162,22 @@ func (a *App) setupUI() {
 
 	// Set global key handlers
 	a.app.SetInputCapture(a.handleGlobalKeys)
+	a.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		width, _ := screen.Size()
+		navWidth := 24
+		if width < 100 {
+			navWidth = 18
+		}
+		if width < 72 {
+			navWidth = 14
+		}
+		a.bodyLayout.ResizeItem(a.navBar, navWidth, 0)
+		return false
+	})
 
 	// Set StatusBar reference in UI Updater
 	ui.Updater.SetStatusBar(a.statusBar)
+	ui.Updater.SetOverlayPages(a.rootPages)
 }
 
 // setupPages initializes all pages
@@ -219,11 +246,14 @@ func (a *App) setupLayouts() {
 	a.mainLayout = tview.NewFlex().
 		AddItem(a.content, 0, 1, false)
 
-	// Root layout (header + navbar + content + status)
+	a.bodyLayout = tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(a.navBar, 24, 0, true).
+		AddItem(a.mainLayout, 0, 1, false)
+
+	// Root layout (header + side navigation/content + status)
 	a.rootLayout = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(a.header, 2, 0, false).
-		AddItem(a.navBar, 1, 0, true).
-		AddItem(a.mainLayout, 0, 1, false).
+		AddItem(a.bodyLayout, 0, 1, true).
 		AddItem(a.statusBar, 2, 0, false)
 }
 
@@ -239,6 +269,11 @@ func (a *App) switchPage(index int) {
 	if index >= 0 && index < len(a.pageNames) {
 		currentPageName := a.pageNames[a.currentPage]
 		if index != a.currentPage {
+			if guard, ok := a.pageLifecycle[currentPageName].(pages.NavigationGuard); ok {
+				if !guard.RequestDeactivate(func() { a.switchPage(index) }) {
+					return
+				}
+			}
 			// Switch to new page
 			a.currentPage = index
 			pageName := a.pageNames[index]

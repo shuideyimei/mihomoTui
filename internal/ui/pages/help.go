@@ -4,32 +4,32 @@ import (
 	"fmt"
 
 	"mihomoTui/internal/i18n"
+	"mihomoTui/internal/ui"
 
 	"github.com/rivo/tview"
-	"mihomoTui/internal/ui"
 )
 
 // buildHelpText builds the help text in the current language
-func buildHelpText() string {
-	return fmt.Sprintf(`[yellow::b]=== %s ===[-::-]
+func buildHelpText(pageInfo []ui.PageInfo) string {
+	text := fmt.Sprintf(`[yellow::b]=== %s ===[-::-]
 
 [green::b]%s:[-::-]
-  [white]F1 / Ctrl+1 / Alt+D[-]  %s
-  [white]F2 / Ctrl+2 / Alt+P[-]  %s
-  [white]F3 / Ctrl+3 / Alt+R[-]  %s
-  [white]F4 / Ctrl+4 / Alt+C[-]  %s
-  [white]F5 / Ctrl+5 / Alt+L[-]  %s
-  [white]F6 / Ctrl+6 / Alt+S[-]  %s
-  [white]F7 / Ctrl+7 / Alt+G[-]  %s
-  [white]F8 / Ctrl+8 / Alt+U[-]  %s
-  [white]F9 / Ctrl+9 / Alt+T[-]  %s
-  [white]F10 / Ctrl+0 / Alt+K[-] %s
-  [white]F11 / Alt+M[-]           %s
-
+`, i18n.T("help.title"), i18n.T("help.section_nav"))
+	for index, item := range pageInfo {
+		ctrl := ""
+		if index < 9 {
+			ctrl = fmt.Sprintf(" / Ctrl+%d", index+1)
+		} else if index == 9 {
+			ctrl = " / Ctrl+0"
+		}
+		text += fmt.Sprintf("  [white]%-18s[-] %s\n", item.Function+ctrl+" / "+item.Alt, item.Label())
+	}
+	text += fmt.Sprintf(`
 [green::b]%s:[-::-]
   [white]Esc[-]       %s
   [white]Tab[-]       %s
   [white]Ctrl+R[-]    %s
+  [white]:[-]         %s
   [white]Ctrl+C/Q[-]  %s
   [white]? / F12[-]   %s
 
@@ -37,27 +37,19 @@ func buildHelpText() string {
   [white]%s:[-] %s
   [white]%s:[-] %s
   [white]%s:[-] %s
+  [white]%s:[-] %s
+  [white]%s:[-] %s
+  [white]%s:[-] %s
+  [white]%s:[-] %s
 
   [gray]%s[-]
 
 [yellow]%s[-]`,
-		i18n.T("help.title"),
-		i18n.T("help.section_nav"),
-		i18n.T("help.nav_dashboard"),
-		i18n.T("help.nav_proxies"),
-		i18n.T("help.nav_connections"),
-		i18n.T("help.nav_config"),
-		i18n.T("help.nav_logs"),
-		i18n.T("help.nav_subscriptions"),
-		i18n.T("help.nav_proxygroups"),
-		i18n.T("help.nav_rules"),
-		i18n.T("help.nav_ruleproviders"),
-		i18n.T("help.nav_settings"),
-		i18n.T("help.nav_configmgr"),
 		i18n.T("help.section_global"),
 		i18n.T("help.global_esc"),
 		i18n.T("help.global_tab"),
 		i18n.T("help.global_refresh"),
+		i18n.T("help.global_commands"),
 		i18n.T("help.global_quit"),
 		i18n.T("help.global_help"),
 		i18n.T("help.section_page"),
@@ -67,17 +59,27 @@ func buildHelpText() string {
 		i18n.T("help.page_connections"),
 		i18n.T("nav.rules"),
 		i18n.T("help.page_rules"),
+		i18n.T("nav.logs"),
+		i18n.T("help.page_logs"),
+		i18n.T("nav.subscriptions"),
+		i18n.T("help.page_subscriptions"),
+		i18n.T("nav.proxygroups"),
+		i18n.T("help.page_proxygroups"),
+		i18n.T("nav.configmgr"),
+		i18n.T("help.page_configmgr"),
 		i18n.T("help.page_hint"),
 		i18n.T("help.close_hint"),
 	)
+	return text
 }
 
 // NewHelpPage creates a help overlay panel showing all keyboard shortcuts
-func NewHelpPage() tview.Primitive {
+func NewHelpPage(pageInfo []ui.PageInfo) tview.Primitive {
 	textView := tview.NewTextView().
 		SetDynamicColors(true).
+		SetScrollable(true).
 		SetTextAlign(tview.AlignLeft).
-		SetText(buildHelpText())
+		SetText(buildHelpText(pageInfo))
 
 	textView.SetBorder(true).
 		SetTitle(fmt.Sprintf(" %s ", i18n.T("help.title"))).
@@ -86,11 +88,11 @@ func NewHelpPage() tview.Primitive {
 
 	innerFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
-		AddItem(textView, 28, 0, true).
+		AddItem(textView, 0, 8, true).
 		AddItem(nil, 0, 1, false)
 
 	return tview.NewFlex().
 		AddItem(nil, 0, 1, false).
-		AddItem(innerFlex, 70, 0, true).
+		AddItem(innerFlex, 0, 8, true).
 		AddItem(nil, 0, 1, false)
 }

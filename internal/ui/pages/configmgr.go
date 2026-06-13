@@ -11,6 +11,7 @@ import (
 	"mihomoTui/internal/config"
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
+	"mihomoTui/internal/ui/components"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -30,6 +31,9 @@ type ConfigManager struct {
 	selectedIdx   int
 	editMode      bool
 	editFlex      *tview.Flex // saved reference for AddPage/RemovePage
+	editPath      string
+	editOriginal  string
+	editDirty     bool
 }
 
 func newConfigManagerPage() *ConfigManager {
@@ -46,43 +50,32 @@ func newConfigManagerPage() *ConfigManager {
 func (cm *ConfigManager) setupUI() {
 	mainFlex := tview.NewFlex()
 	mainFlex.SetDirection(tview.FlexRow)
-	mainFlex.SetBorder(true)
-	mainFlex.SetTitle(fmt.Sprintf(" %s ", i18n.T("cmgr.title")))
+	mainFlex.SetBorder(false)
 
 	cm.configList = tview.NewList()
 	cm.configList.SetBorder(true)
 	cm.configList.SetTitle(fmt.Sprintf(" %s ", i18n.T("cmgr.file_list")))
-	cm.configList.SetMainTextColor(tcell.ColorWhite)
-	cm.configList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
-	cm.configList.SetSelectedTextColor(tcell.ColorBlack)
+	components.StyleSelectableList(cm.configList)
 	cm.configList.SetInputCapture(cm.handleConfigListInput)
 	cm.configList.SetChangedFunc(func(idx int, _ string, _ string, _ rune) {
 		cm.selectedIdx = idx
-	})
-	cm.configList.SetFocusFunc(func() {
-		cm.configList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
-	})
-	cm.configList.SetBlurFunc(func() {
-		cm.configList.SetSelectedBackgroundColor(ui.ThemeSelBgBlur)
 	})
 
 	cm.editArea = tview.NewTextArea()
 	cm.editArea.SetWrap(false)
 	cm.editArea.SetWordWrap(false)
+	cm.editArea.SetBorder(true)
+	components.StyleFocusBorder(cm.editArea)
+	cm.editArea.SetChangedFunc(cm.updateEditTitle)
+	cm.editArea.SetMovedFunc(cm.updateEditTitle)
 
 	cm.statusText = tview.NewTextView()
-	cm.statusText.SetBorder(true)
-	cm.statusText.SetTitle(fmt.Sprintf(" %s ", i18n.T("cmgr.status")))
-	cm.statusText.SetDynamicColors(true)
+	components.StyleStatusLine(cm.statusText)
 	cm.statusText.SetText(i18n.T("cmgr.status_ready"))
 
 	// Build edit dialog page (reusable, shown/hidden as a page overlay)
-	editSaveBtn := tview.NewButton(i18n.T("cmgr.save_btn"))
-	editSaveBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	editSaveBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	editCancelBtn := tview.NewButton(i18n.T("cmgr.cancel_btn"))
-	editCancelBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	editCancelBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	editSaveBtn := components.NewButton(i18n.T("cmgr.save_btn"), components.ButtonPrimary, nil)
+	editCancelBtn := components.NewButton(i18n.T("cmgr.cancel_btn"), components.ButtonNormal, nil)
 
 	editBtnFlex := tview.NewFlex()
 	editBtnFlex.AddItem(nil, 0, 1, false)
@@ -112,19 +105,14 @@ func (cm *ConfigManager) setupUI() {
 		go cm.saveEdit(text)
 	})
 	editCancelBtn.SetSelectedFunc(func() {
-		cm.closeEditDialog()
+		cm.requestCloseEditDialog()
 	})
 	cm.editFlex = editFlex
 
-	editBtn := tview.NewButton(i18n.T("cmgr.preview_btn"))
-	editBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	editBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	editBtn := components.NewButton(i18n.T("cmgr.preview_btn"), components.ButtonNormal, nil)
 	editBtn.SetSelectedFunc(func() { cm.showEditDialog() })
 
-	deleteBtn := tview.NewButton(i18n.T("cmgr.delete_btn"))
-	deleteBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	deleteBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	deleteBtn.SetLabelColorActivated(tcell.ColorWhite)
+	deleteBtn := components.NewButton(i18n.T("cmgr.delete_btn"), components.ButtonDanger, nil)
 	deleteBtn.SetSelectedFunc(func() { cm.showDeleteConfirm() })
 
 	btnFlex := tview.NewFlex()
@@ -140,7 +128,7 @@ func (cm *ConfigManager) setupUI() {
 	helpText.SetTextAlign(tview.AlignCenter)
 
 	mainFlex.AddItem(cm.configList, 0, 1, true)
-	mainFlex.AddItem(cm.statusText, 3, 0, false)
+	mainFlex.AddItem(cm.statusText, 1, 0, false)
 	mainFlex.AddItem(btnFlex, 1, 0, false)
 	mainFlex.AddItem(helpText, 1, 0, false)
 
@@ -180,6 +168,17 @@ func (cm *ConfigManager) Deactivate() {
 			cm.closeEditDialog()
 		})
 	}
+}
+
+func (cm *ConfigManager) RequestDeactivate(continueNavigation func()) bool {
+	if !cm.editMode || !cm.editDirty {
+		return true
+	}
+	ui.Updater.ShowConfirm(i18n.T("cmgr.unsaved_title"), i18n.T("cmgr.unsaved_confirm"), func() {
+		cm.closeEditDialog()
+		continueNavigation()
+	})
+	return false
 }
 
 func (cm *ConfigManager) refresh() {
@@ -278,7 +277,9 @@ func (cm *ConfigManager) showEditDialog() {
 
 		ui.Updater.PostUi(func() {
 			cm.editMode = true
-			cm.editArea.SetTitle(fmt.Sprintf(i18n.T("cmgr.edit_file"), config.FriendlyPath(path)))
+			cm.editPath = path
+			cm.editOriginal = content
+			cm.editDirty = false
 			cm.editArea.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 				if ev.Key() == tcell.KeyCtrlS || (ev.Modifiers()&tcell.ModCtrl != 0 && (ev.Rune() == 's' || ev.Rune() == 'S')) {
 					cm.statusText.SetText(i18n.T("cmgr.saving"))
@@ -287,12 +288,13 @@ func (cm *ConfigManager) showEditDialog() {
 					return nil
 				}
 				if ev.Key() == tcell.KeyEscape {
-					cm.closeEditDialog()
+					cm.requestCloseEditDialog()
 					return nil
 				}
 				return ev
 			})
 			cm.editArea.SetText(content, true)
+			cm.updateEditTitle()
 			cm.pages.AddPage("edit", cm.editFlex, true, true)
 			ui.Updater.SetFocus(cm.editArea)
 		})
@@ -304,10 +306,35 @@ func (cm *ConfigManager) closeEditDialog() {
 		return
 	}
 	cm.editMode = false
+	cm.editPath = ""
+	cm.editOriginal = ""
+	cm.editDirty = false
 	cm.editArea.SetText("", true)
 	cm.pages.RemovePage("edit")
 	cm.pages.SwitchToPage("main")
 	cm.statusText.SetText(i18n.T("cmgr.edit_exited"))
+}
+
+func (cm *ConfigManager) requestCloseEditDialog() {
+	if !cm.editDirty {
+		cm.closeEditDialog()
+		return
+	}
+	ui.Updater.ShowConfirm(i18n.T("cmgr.unsaved_title"), i18n.T("cmgr.unsaved_confirm"), cm.closeEditDialog)
+}
+
+func (cm *ConfigManager) updateEditTitle() {
+	if !cm.editMode {
+		return
+	}
+	cm.editDirty = cm.editArea.GetText() != cm.editOriginal
+	row, column, _, _ := cm.editArea.GetCursor()
+	dirty := ""
+	if cm.editDirty {
+		dirty = " *"
+	}
+	cm.editArea.SetTitle(fmt.Sprintf(i18n.T("cmgr.edit_position"),
+		config.FriendlyPath(cm.editPath), row+1, column+1, dirty))
 }
 
 func (cm *ConfigManager) saveEdit(text string) {
@@ -407,74 +434,37 @@ func (cm *ConfigManager) showDeleteConfirm() {
 		return
 	}
 
-	textView := tview.NewTextView()
-	textView.SetDynamicColors(true)
-	textView.SetTextAlign(tview.AlignCenter)
-	warning := fmt.Sprintf(i18n.T("cmgr.delete_confirm"), tview.Escape(label))
-	textView.SetText(warning)
+	ui.Updater.ConfirmDelete(label, func() {
+		go cm.deleteConfig(path, label)
+	})
+}
 
-	deleteBtn := tview.NewButton(i18n.T("cmgr.delete_confirm_btn"))
-	deleteBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	deleteBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	cancelBtn := tview.NewButton(i18n.T("cmgr.delete_cancel_btn"))
-	cancelBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	cancelBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-
-	btnFlex := tview.NewFlex()
-	btnFlex.AddItem(deleteBtn, 0, 1, true)
-	btnFlex.AddItem(cancelBtn, 0, 1, false)
-
-	dialog := tview.NewFlex()
-	dialog.SetDirection(tview.FlexRow)
-	dialog.SetBorder(true)
-	dialog.SetTitle(fmt.Sprintf(" %s ", i18n.T("cmgr.delete_title")))
-	dialog.AddItem(textView, 3, 0, true)
-	dialog.AddItem(btnFlex, 1, 0, false)
-
-	flex := tview.NewFlex()
-	flex.AddItem(nil, 0, 1, false)
-	flex.AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(nil, 0, 1, false).
-		AddItem(dialog, 6, 0, true).
-		AddItem(nil, 0, 1, false), 50, 0, true)
-	flex.AddItem(nil, 0, 1, false)
-
-	deleteBtn.SetSelectedFunc(func() {
-		if config.SameConfigFile(path, config.FindCurrentConfigPath()) {
+func (cm *ConfigManager) deleteConfig(path, label string) {
+	if config.SameConfigFile(path, config.FindCurrentConfigPath()) {
+		ui.Updater.PostUi(func() {
 			cm.statusText.SetText(i18n.T("cmgr.delete_active_forbidden"))
-			cm.pages.SwitchToPage("main")
+		})
+		return
+	}
+	err := os.Remove(path)
+	ui.Updater.PostUi(func() {
+		if err != nil {
+			cm.statusText.SetText(fmt.Sprintf(i18n.T("cmgr.delete_fail"), tview.Escape(err.Error())))
 			return
 		}
-		if err := os.Remove(path); err != nil {
-			cm.statusText.SetText(fmt.Sprintf(i18n.T("cmgr.delete_fail"), tview.Escape(err.Error())))
-		} else {
-			cm.mu.Lock()
-			if idx >= 0 && idx < len(cm.files) {
-				cm.files = append(cm.files[:idx], cm.files[idx+1:]...)
+		cm.mu.Lock()
+		for index, file := range cm.files {
+			if file == path {
+				cm.files = append(cm.files[:index], cm.files[index+1:]...)
+				break
 			}
-			cm.selectedIdx = -1
-			cm.mu.Unlock()
-			cm.rebuildList()
-			cm.statusText.SetText(fmt.Sprintf(i18n.T("cmgr.deleted"), tview.Escape(label)))
-			log.Printf("[configmgr] deleted config: %s", path)
 		}
-		cm.pages.SwitchToPage("main")
+		cm.selectedIdx = -1
+		cm.mu.Unlock()
+		cm.rebuildList()
+		cm.statusText.SetText(fmt.Sprintf(i18n.T("cmgr.deleted"), tview.Escape(label)))
+		log.Printf("[configmgr] deleted config: %s", path)
 	})
-
-	cancelBtn.SetSelectedFunc(func() {
-		cm.pages.SwitchToPage("main")
-	})
-
-	dialog.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
-		if ev.Key() == tcell.KeyEscape {
-			cm.pages.SwitchToPage("main")
-			return nil
-		}
-		return ev
-	})
-
-	cm.pages.AddPage("delete", flex, true, true)
-	cm.pages.SwitchToPage("delete")
 }
 
 // ensureSafePaths adds the user's config directory to Mihomo's SAFE_PATHS so that

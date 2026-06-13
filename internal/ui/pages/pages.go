@@ -11,6 +11,11 @@ type ActivatablePage interface {
 	Deactivate()
 }
 
+// NavigationGuard lets a page defer navigation while it confirms unsaved work.
+type NavigationGuard interface {
+	RequestDeactivate(continueNavigation func()) bool
+}
+
 // NewDashboard creates a new dashboard page
 func NewDashboard() *DashboardPage {
 	return NewDashboardPage()

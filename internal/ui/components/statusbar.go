@@ -124,7 +124,7 @@ func (s *StatusBar) updateContent() {
 	var content string
 
 	// Proxy mode
-	mode := "Unknown"
+	mode := i18n.T("status.unknown")
 	if s.config != nil {
 		mode = s.config.Mode
 	}
@@ -153,7 +153,7 @@ func (s *StatusBar) updateContent() {
 	}
 
 	content = fmt.Sprintf("%s%s[white] | ↑ [green]%s[white]  ↓ [green]%s[white]  [gray]%s[-]",
-		modeTag, mode, upSpeed, downSpeed, i18n.T("status.help"))
+		modeTag, mode, upSpeed, downSpeed, i18n.T("status.shortcuts"))
 
 	s.SetText(content)
 }

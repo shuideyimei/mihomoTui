@@ -11,6 +11,7 @@ import (
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
+	"mihomoTui/internal/ui/components"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -112,7 +113,7 @@ func (p *LogsPage) setupUI() {
 	// Search input
 	p.searchInput = tview.NewInputField().
 		SetLabel(i18n.T("log.search_label")).
-		SetFieldWidth(20)
+		SetFieldWidth(0)
 	p.searchInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.searchInput.SetChangedFunc(func(text string) {
 		p.mu.Lock()
@@ -123,16 +124,14 @@ func (p *LogsPage) setupUI() {
 
 	// Pause/Resume button
 	p.pauseBtn = tview.NewButton(i18n.T("log.pause"))
-	p.pauseBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	p.pauseBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	components.StyleButton(p.pauseBtn, components.ButtonNormal)
 	p.pauseBtn.SetSelectedFunc(func() {
 		p.togglePause()
 	})
 
 	// Clear button
 	p.clearBtn = tview.NewButton(i18n.T("log.clear"))
-	p.clearBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	p.clearBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	components.StyleButton(p.clearBtn, components.ButtonDanger)
 	p.clearBtn.SetSelectedFunc(func() {
 		p.Clear()
 	})
@@ -150,8 +149,29 @@ func (p *LogsPage) setupUI() {
 	p.AddItem(controlBar, 1, 0, false)
 	p.AddItem(p.textView, 0, 1, true)
 
-	p.SetBorder(true)
+	p.SetBorder(false)
 	p.SetTitle(fmt.Sprintf(" %s ", i18n.T("log.title")))
+	p.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if p.searchInput.HasFocus() {
+			if event.Key() == tcell.KeyEscape {
+				p.searchInput.SetText("")
+				return nil
+			}
+			return event
+		}
+		switch event.Rune() {
+		case '/':
+			ui.Updater.SetFocus(p.searchInput)
+			return nil
+		case 'c', 'C':
+			p.Clear()
+			return nil
+		case ' ':
+			p.togglePause()
+			return nil
+		}
+		return event
+	})
 }
 
 func (p *LogsPage) onLevelChanged() {

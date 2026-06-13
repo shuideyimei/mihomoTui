@@ -2,6 +2,7 @@ package pages
 
 import (
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -10,6 +11,22 @@ func TestConfigManager_New_NonNil(t *testing.T) {
 	cm := NewConfigManager()
 	if cm == nil {
 		t.Fatal("NewConfigManager() returned nil")
+	}
+}
+
+func TestConfigManagerMarksEditedContentDirty(t *testing.T) {
+	cm := NewConfigManager()
+	cm.editMode = true
+	cm.editPath = "/tmp/config.yaml"
+	cm.editOriginal = "mixed-port: 7890\n"
+	cm.editArea.SetText("mixed-port: 7891\n", true)
+	cm.updateEditTitle()
+
+	if !cm.editDirty {
+		t.Fatal("edited content should be marked dirty")
+	}
+	if !strings.Contains(cm.editArea.GetTitle(), "*") {
+		t.Fatalf("dirty editor title should contain *, got %q", cm.editArea.GetTitle())
 	}
 }
 

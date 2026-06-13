@@ -10,6 +10,7 @@ import (
 	"mihomoTui/internal/config"
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
+	"mihomoTui/internal/ui/components"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -59,28 +60,26 @@ func (p *Page) setupUI() {
 	p.detailView.SetWordWrap(true)
 
 	p.actionBar = tview.NewFlex()
-	p.actionBar.SetBorder(true)
-	p.actionBar.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.actions")))
+	components.StyleActionBar(p.actionBar)
 	p.setupActionBar()
 
 	p.status = tview.NewTextView()
-	p.status.SetBorder(true)
-	p.status.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.status")))
-	p.status.SetDynamicColors(true)
+	components.StyleStatusLine(p.status)
 	p.status.SetText(i18n.T("pg.status_ready"))
 
 	rightPanel.AddItem(p.detailView, 0, 3, false)
-	rightPanel.AddItem(p.actionBar, 3, 0, false)
-	rightPanel.AddItem(p.status, 3, 0, false)
+	rightPanel.AddItem(p.actionBar, 1, 0, false)
+	rightPanel.AddItem(p.status, 1, 0, false)
 
 	p.groupForm = tview.NewForm()
 	p.groupForm.SetBorder(true)
 	p.groupForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.add_title")))
+	components.StyleFocusBorder(p.groupForm)
 	p.groupForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput = tview.NewInputField()
 	p.nameInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput.SetLabel(i18n.T("pg.name_label"))
-	p.nameInput.SetFieldWidth(30)
+	p.nameInput.SetFieldWidth(0)
 	p.typeSelect = tview.NewDropDown()
 	p.typeSelect.SetLabel(i18n.T("pg.type_label"))
 	p.typeSelect.SetFieldBackgroundColor(ui.ThemeInputBg)
@@ -95,19 +94,19 @@ func (p *Page) setupUI() {
 	p.proxiesInput = tview.NewInputField()
 	p.proxiesInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.proxiesInput.SetLabel(i18n.T("pg.nodes_label"))
-	p.proxiesInput.SetFieldWidth(40)
+	p.proxiesInput.SetFieldWidth(0)
 	p.useInput = tview.NewInputField()
 	p.useInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.useInput.SetLabel(i18n.T("pg.providers_label"))
-	p.useInput.SetFieldWidth(40)
+	p.useInput.SetFieldWidth(0)
 	p.urlInput = tview.NewInputField()
 	p.urlInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.urlInput.SetLabel(i18n.T("pg.test_url_label"))
-	p.urlInput.SetFieldWidth(40)
+	p.urlInput.SetFieldWidth(0)
 	p.filterInput = tview.NewInputField()
 	p.filterInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.filterInput.SetLabel(i18n.T("pg.filter_label"))
-	p.filterInput.SetFieldWidth(30)
+	p.filterInput.SetFieldWidth(0)
 
 	p.groupForm.AddFormItem(p.nameInput)
 	p.groupForm.AddFormItem(p.typeSelect)
@@ -119,18 +118,17 @@ func (p *Page) setupUI() {
 	p.groupForm.AddButton(i18n.T("pg.cancel_btn"), p.onCancelClicked)
 	p.groupForm.SetButtonsAlign(tview.AlignCenter)
 	p.groupForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	p.groupForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	p.groupForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorBlack))
 
 	leftPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	leftPanel.AddItem(p.groupList, 0, 1, true)
 
-	mainFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
-	mainFlex.AddItem(leftPanel, 0, 2, true)
-	mainFlex.AddItem(rightPanel, 0, 3, false)
+	mainFlex := tview.NewFlex().SetDirection(tview.FlexRow)
+	mainFlex.AddItem(components.NewResponsiveSplit(leftPanel, rightPanel, 92, 2, 3), 0, 1, true)
 
 	p.SetDirection(tview.FlexRow)
 	p.AddItem(mainFlex, 0, 1, true)
-	p.SetBorder(true)
+	p.SetBorder(false)
 	p.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.title")))
 }
 
@@ -138,9 +136,7 @@ func (p *Page) setupGroupList() {
 	p.groupList = tview.NewList()
 	p.groupList.SetBorder(true)
 	p.groupList.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.group_list_title")))
-	p.groupList.SetMainTextColor(tcell.ColorWhite)
-	p.groupList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
-	p.groupList.SetSelectedTextColor(tcell.ColorBlack)
+	components.StyleSelectableList(p.groupList)
 	p.groupList.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 		switch ev.Key() {
 		case tcell.KeyCtrlD:
@@ -181,25 +177,10 @@ func (p *Page) setupGroupList() {
 }
 
 func (p *Page) setupActionBar() {
-	btnStyle := tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite)
-	btnFocus := tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite)
-
-	refreshBtn := tview.NewButton(i18n.T("pg.refresh_action"))
-	refreshBtn.SetStyle(btnStyle)
-	refreshBtn.SetActivatedStyle(btnFocus)
-	refreshBtn.SetSelectedFunc(func() { go p.refresh() })
-	addBtn := tview.NewButton(i18n.T("pg.add_action"))
-	addBtn.SetStyle(btnStyle)
-	addBtn.SetActivatedStyle(btnFocus)
-	addBtn.SetSelectedFunc(p.showAddForm)
-	editBtn := tview.NewButton(i18n.T("pg.edit_action"))
-	editBtn.SetStyle(btnStyle)
-	editBtn.SetActivatedStyle(btnFocus)
-	editBtn.SetSelectedFunc(p.showEditForm)
-	deleteBtn := tview.NewButton(i18n.T("pg.del_action"))
-	deleteBtn.SetStyle(btnStyle)
-	deleteBtn.SetActivatedStyle(btnFocus)
-	deleteBtn.SetSelectedFunc(func() { go p.deleteSelected() })
+	refreshBtn := components.NewButton(i18n.T("pg.refresh_action"), components.ButtonNormal, func() { go p.refresh() })
+	addBtn := components.NewButton(i18n.T("pg.add_action"), components.ButtonPrimary, p.showAddForm)
+	editBtn := components.NewButton(i18n.T("pg.edit_action"), components.ButtonNormal, p.showEditForm)
+	deleteBtn := components.NewButton(i18n.T("pg.del_action"), components.ButtonDanger, func() { go p.deleteSelected() })
 
 	p.actionBar.AddItem(refreshBtn, 0, 1, false)
 	p.actionBar.AddItem(addBtn, 0, 1, false)
@@ -384,6 +365,12 @@ func (p *Page) deleteSelected() {
 		return
 	}
 
+	ui.Updater.ConfirmDelete(g.Name, func() {
+		go p.deleteGroup(g)
+	})
+}
+
+func (p *Page) deleteGroup(g config.ProxyGroupEntry) {
 	configPath, err := config.DeleteGroupFromConfig(g.Name)
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("pg.delete_fail"), err))

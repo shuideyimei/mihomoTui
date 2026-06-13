@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"mihomoTui/internal/api"
+	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
 	"strings"
 
@@ -44,14 +45,14 @@ func (h *Header) setupStyle() {
 
 // updateContent updates the header content
 func (h *Header) updateContent() {
-	status := ui.ThemeTagDisconnected + "○" + ui.ThemeTagWhite
+	status := ui.ThemeTagDisconnected + "○ " + i18n.T("header.disconnected") + ui.ThemeTagWhite
 	if h.connected {
-		status = ui.ThemeTagConnected + "●" + ui.ThemeTagWhite
+		status = ui.ThemeTagConnected + "● " + i18n.T("header.connected") + ui.ThemeTagWhite
 	}
 
 	content := strings.Builder{}
 	content.WriteString(fmt.Sprintf("%s %s", h.appName, h.appVersion))
-	content.WriteString(fmt.Sprintf(" | core: %s | %s", h.coreVersion, status))
+	content.WriteString(fmt.Sprintf(" | %s: %s | %s", i18n.T("header.core"), h.coreVersion, status))
 
 	h.SetText(content.String())
 }

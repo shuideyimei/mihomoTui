@@ -1,6 +1,7 @@
 package components
 
 import (
+	"fmt"
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
 
@@ -8,172 +9,85 @@ import (
 	"github.com/rivo/tview"
 )
 
-// NavItem represents a navigation bar menu item
-type NavItem struct {
-	Name     string // display name
-	Shortcut string // keyboard shortcut
-}
-
-// NavBar is a single-row horizontal navigation bar at the top of the page.
+// NavBar is a vertical page navigator. The active page marker remains visible
+// even while another component owns keyboard focus.
 type NavBar struct {
-	*tview.Flex
-	items    []NavItem
-	buttons  []*tview.Button
-	onSelect func(int, string)
-
+	*tview.List
+	items        []ui.PageInfo
+	onSelect     func(int, string)
 	currentIndex int
-	navigator    *FocusNavigator
 }
 
-// NewNavBar creates a new navigation bar component.
-func NewNavBar() *NavBar {
+func NewNavBar(items []ui.PageInfo) *NavBar {
 	n := &NavBar{
-		Flex: tview.NewFlex(),
-		items: []NavItem{
-			{Name: i18n.T("nav.dashboard"), Shortcut: "D"},
-			{Name: i18n.T("nav.proxies"), Shortcut: "P"},
-			{Name: i18n.T("nav.connections"), Shortcut: "R"},
-			{Name: i18n.T("nav.config"), Shortcut: "C"},
-			{Name: i18n.T("nav.logs"), Shortcut: "L"},
-			{Name: i18n.T("nav.subscriptions"), Shortcut: "S"},
-			{Name: i18n.T("nav.proxygroups"), Shortcut: "G"},
-			{Name: i18n.T("nav.rules"), Shortcut: "U"},
-			{Name: i18n.T("nav.ruleproviders"), Shortcut: "T"},
-			{Name: i18n.T("nav.settings"), Shortcut: "K"},
-			{Name: i18n.T("nav.configmgr"), Shortcut: "M"},
-		},
+		List:         tview.NewList(),
+		items:        append([]ui.PageInfo(nil), items...),
 		currentIndex: 0,
 	}
-
-	n.setupBar()
-	return n
-}
-
-// setupBar creates the single-row button bar.
-func (n *NavBar) setupBar() {
-	n.SetDirection(tview.FlexColumn)
-
-	n.buttons = make([]*tview.Button, 0, len(n.items))
-
-	for idx, item := range n.items {
-		index := idx // capture
-		label := " " + item.Name
-		btn := tview.NewButton(label)
-		btn.SetSelectedFunc(func() {
-			n.onItemSelected(index)
-		})
-		btn.SetStyle(tcell.StyleDefault.
-			Background(tcell.ColorDarkGray).
-			Foreground(tcell.ColorGray),
-		)
-		btn.SetActivatedStyle(tcell.StyleDefault.
-			Background(tcell.ColorGray).
-			Foreground(tcell.ColorWhite),
-		)
-
-		n.buttons = append(n.buttons, btn)
-		n.AddItem(btn, 0, 1, idx == 0)
-	}
-
-	// Build focus navigator from all buttons
-	navigatorPrimitives := make([]tview.Primitive, len(n.buttons))
-	for i, b := range n.buttons {
-		navigatorPrimitives[i] = b
-	}
-	n.navigator = NewFocusNavigator(navigatorPrimitives...)
-
-	// Keyboard navigation via Tab/arrows
+	n.SetBorder(true)
+	n.SetTitle(" " + i18n.T("nav.title") + " ")
+	n.ShowSecondaryText(true)
+	n.SetHighlightFullLine(true)
+	StyleSelectableList(n.List)
+	n.SetSelectedFunc(func(index int, _ string, _ string, _ rune) {
+		n.onItemSelected(index)
+	})
 	n.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
-		case tcell.KeyTAB, tcell.KeyRight:
-			n.navigator.Next()
-			return nil
-		case tcell.KeyBacktab, tcell.KeyLeft:
-			n.navigator.Prev()
+		case tcell.KeyRight, tcell.KeyEnter:
+			n.onItemSelected(n.GetCurrentItem())
 			return nil
 		}
 		return event
 	})
-
-	// Focus: highlight current item
-	n.SetFocusFunc(func() {
-		n.highlightCurrent()
-	})
-
-	n.SetBlurFunc(func() {
-		n.blurAll()
-	})
+	n.rebuild()
+	return n
 }
 
-// onItemSelected handles a navigation item being selected.
+func (n *NavBar) rebuild() {
+	cursor := n.GetCurrentItem()
+	n.Clear()
+	for index, item := range n.items {
+		marker := "  "
+		if index == n.currentIndex {
+			marker = "[green]●[-] "
+		}
+		secondary := item.Function
+		if item.Alt != "" {
+			secondary = fmt.Sprintf("%s  %s", item.Function, item.Alt)
+		}
+		n.AddItem(marker+item.Label(), secondary, 0, nil)
+	}
+	if cursor >= 0 && cursor < len(n.items) {
+		n.SetCurrentItem(cursor)
+	}
+}
+
 func (n *NavBar) onItemSelected(index int) {
 	if index < 0 || index >= len(n.items) {
 		return
 	}
 	n.currentIndex = index
-	// highlightCurrent is called by SelectItem (invoked in switchPage)
+	n.rebuild()
 	if n.onSelect != nil {
-		n.onSelect(index, n.items[index].Name)
+		n.onSelect(index, n.items[index].Label())
 	}
 }
 
-// highlightCurrent applies the focused/active style to the current button
-// and the unfocused style to all others.
-func (n *NavBar) highlightCurrent() {
-	for i, btn := range n.buttons {
-		if i == n.currentIndex {
-			btn.SetStyle(tcell.StyleDefault.
-				Background(ui.ThemeHighlightBg).
-				Foreground(tcell.ColorBlack),
-			)
-			btn.SetActivatedStyle(tcell.StyleDefault.
-				Background(ui.ThemeHighlightBg).
-				Foreground(tcell.ColorBlack),
-			)
-		} else {
-			btn.SetStyle(tcell.StyleDefault.
-				Background(tcell.ColorDarkGray).
-				Foreground(tcell.ColorGray),
-			)
-			btn.SetActivatedStyle(tcell.StyleDefault.
-				Background(tcell.ColorGray).
-				Foreground(tcell.ColorWhite),
-			)
-		}
-	}
-}
-
-// blurAll sets all buttons to the blur (unfocused) style.
-func (n *NavBar) blurAll() {
-	for _, btn := range n.buttons {
-		btn.SetStyle(tcell.StyleDefault.
-			Background(tcell.ColorDarkGray).
-			Foreground(tcell.ColorGray),
-		)
-		btn.SetActivatedStyle(tcell.StyleDefault.
-			Background(tcell.ColorGray).
-			Foreground(tcell.ColorWhite),
-		)
-	}
-}
-
-// SetOnSelect sets the callback for when a navigation item is selected.
 func (n *NavBar) SetOnSelect(callback func(int, string)) {
 	n.onSelect = callback
 }
 
-// GetCurrentItem returns the currently selected item index and name.
-func (n *NavBar) GetCurrentItem() (int, string) {
+func (n *NavBar) GetCurrentPage() (int, string) {
 	if n.currentIndex >= 0 && n.currentIndex < len(n.items) {
-		return n.currentIndex, n.items[n.currentIndex].Name
+		return n.currentIndex, n.items[n.currentIndex].Label()
 	}
 	return -1, ""
 }
 
-// SelectItem selects a specific item by index.
 func (n *NavBar) SelectItem(index int) {
 	if index >= 0 && index < len(n.items) {
 		n.currentIndex = index
-		n.highlightCurrent()
+		n.rebuild()
 	}
 }

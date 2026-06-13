@@ -10,15 +10,21 @@ import (
 var (
 	ThemeBorderColor = tcell.ColorGray
 	ThemeTitleColor  = tcell.ColorWhite    // Bright white for titles
-	ThemeHighlightBg = tcell.ColorGray     // Selection highlight background
-	ThemeSelBgFocus  = tcell.ColorGray     // Focused selection
-	ThemeSelBgBlur   = tcell.ColorDarkGray // Blurred selection
+	ThemeHighlightBg = tcell.ColorGray     // Backward-compatible selection color
+	ThemeSelBgFocus  = tcell.ColorGray     // Backward-compatible focused selection
+	ThemeSelBgBlur   = tcell.ColorDarkGray // Backward-compatible blurred selection
 	ThemeHeaderBg    = tcell.ColorDarkGray // Header background
 	ThemeStatusBarBg = tcell.ColorDarkGray // Status bar background
+	ThemeFocusColor  = tcell.ColorYellow
+	ThemeActiveColor = tcell.ColorGreen
+	ThemeDangerColor = tcell.ColorRed
+
+	ThemeSelectionColor     = tcell.ColorGray
+	ThemeSelectionBlurColor = tcell.ColorDarkGray
 	// Component backgrounds — all gray tones
-	ThemeButtonBg      = tcell.ColorGray     // Normal button background
-	ThemeButtonFocusBg = tcell.ColorDarkGray // Focused/activated button background
-	ThemeInputBg       = tcell.ColorGray     // Input field background (editable area)
+	ThemeButtonBg      = tcell.ColorGray   // Normal button background
+	ThemeButtonFocusBg = tcell.ColorYellow // Focused/activated button background
+	ThemeInputBg       = tcell.ColorGray   // Input field background (editable area)
 
 	// ApplyThemeOnce guards the one-time application of global tview styles
 	applyThemeOnce bool

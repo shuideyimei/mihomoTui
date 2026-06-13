@@ -10,6 +10,7 @@ import (
 	"mihomoTui/internal/config"
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
+	"mihomoTui/internal/ui/components"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -83,32 +84,30 @@ func (p *Page) setupUI() {
 	p.detailView.SetWordWrap(true)
 
 	p.actionBar = tview.NewFlex()
-	p.actionBar.SetBorder(true)
-	p.actionBar.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.actions")))
+	components.StyleActionBar(p.actionBar)
 	p.setupActionBar()
 
 	p.status = tview.NewTextView()
-	p.status.SetBorder(true)
-	p.status.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.status")))
-	p.status.SetDynamicColors(true)
+	components.StyleStatusLine(p.status)
 	p.status.SetText(i18n.T("rp.status_ready"))
 
 	rightPanel.AddItem(p.detailView, 0, 3, false)
-	rightPanel.AddItem(p.actionBar, 3, 0, false)
-	rightPanel.AddItem(p.status, 3, 0, false)
+	rightPanel.AddItem(p.actionBar, 1, 0, false)
+	rightPanel.AddItem(p.status, 1, 0, false)
 
 	p.importForm = tview.NewForm()
 	p.importForm.SetBorder(true)
 	p.importForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.import_title")))
+	components.StyleFocusBorder(p.importForm)
 	p.importForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput = tview.NewInputField()
 	p.nameInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput.SetLabel(i18n.T("rp.name_label"))
-	p.nameInput.SetFieldWidth(30)
+	p.nameInput.SetFieldWidth(0)
 	p.urlInput = tview.NewInputField()
 	p.urlInput.SetFieldBackgroundColor(ui.ThemeInputBg)
-	p.urlInput.SetLabel("URL ")
-	p.urlInput.SetFieldWidth(50)
+	p.urlInput.SetLabel(i18n.T("rp.url_label"))
+	p.urlInput.SetFieldWidth(0)
 	p.behaviorSelect = tview.NewDropDown()
 	p.behaviorSelect.SetLabel(i18n.T("rp.behavior_label"))
 	p.behaviorSelect.SetFieldBackgroundColor(ui.ThemeInputBg)
@@ -123,7 +122,7 @@ func (p *Page) setupUI() {
 	p.intervalInput = tview.NewInputField()
 	p.intervalInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.intervalInput.SetLabel(i18n.T("rp.interval_label"))
-	p.intervalInput.SetFieldWidth(10)
+	p.intervalInput.SetFieldWidth(0)
 	p.intervalInput.SetText("3600")
 
 	p.importForm.AddFormItem(p.nameInput)
@@ -134,20 +133,19 @@ func (p *Page) setupUI() {
 	p.importForm.AddButton(i18n.T("rp.cancel_btn"), p.onCancelImport)
 	p.importForm.SetButtonsAlign(tview.AlignCenter)
 	p.importForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	p.importForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	p.importForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorBlack))
 
 	p.setupPasteImport()
 
 	leftPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	leftPanel.AddItem(p.subList, 0, 1, true)
 
-	mainFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
-	mainFlex.AddItem(leftPanel, 0, 2, true)
-	mainFlex.AddItem(rightPanel, 0, 3, false)
+	mainFlex := tview.NewFlex().SetDirection(tview.FlexRow)
+	mainFlex.AddItem(components.NewResponsiveSplit(leftPanel, rightPanel, 92, 2, 3), 0, 1, true)
 
 	p.SetDirection(tview.FlexRow)
 	p.AddItem(mainFlex, 0, 1, true)
-	p.SetBorder(true)
+	p.SetBorder(false)
 	p.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.title")))
 }
 
@@ -155,9 +153,7 @@ func (p *Page) setupSubList() {
 	p.subList = tview.NewList()
 	p.subList.SetBorder(true)
 	p.subList.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.sub_list_title")))
-	p.subList.SetMainTextColor(tcell.ColorWhite)
-	p.subList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
-	p.subList.SetSelectedTextColor(tcell.ColorBlack)
+	components.StyleSelectableList(p.subList)
 	p.subList.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 		switch ev.Key() {
 		case tcell.KeyEnter:
@@ -195,27 +191,11 @@ func (p *Page) setupSubList() {
 }
 
 func (p *Page) setupActionBar() {
-	refreshBtn := tview.NewButton(i18n.T("rp.refresh_action"))
-	refreshBtn.SetSelectedFunc(func() { go p.refresh() })
-	importBtn := tview.NewButton(i18n.T("rp.import_action"))
-	importBtn.SetSelectedFunc(p.showImportForm)
-	quickImportBtn := tview.NewButton(i18n.T("rp.quick_import_action"))
-	quickImportBtn.SetSelectedFunc(p.showQuickImportPage)
-	quickImportBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	quickImportBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	pasteBtn := tview.NewButton(i18n.T("rp.paste_action"))
-	pasteBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	pasteBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	pasteBtn.SetSelectedFunc(p.showPasteImport)
-	deleteBtn := tview.NewButton(i18n.T("rp.del_action"))
-	deleteBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	deleteBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	deleteBtn.SetSelectedFunc(func() { go p.deleteSelected() })
-
-	refreshBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	refreshBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	importBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	importBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	refreshBtn := components.NewButton(i18n.T("rp.refresh_action"), components.ButtonNormal, func() { go p.refresh() })
+	importBtn := components.NewButton(i18n.T("rp.import_action"), components.ButtonPrimary, p.showImportForm)
+	quickImportBtn := components.NewButton(i18n.T("rp.quick_import_action"), components.ButtonNormal, p.showQuickImportPage)
+	pasteBtn := components.NewButton(i18n.T("rp.paste_action"), components.ButtonNormal, p.showPasteImport)
+	deleteBtn := components.NewButton(i18n.T("rp.del_action"), components.ButtonDanger, func() { go p.deleteSelected() })
 
 	p.actionBar.AddItem(refreshBtn, 0, 1, false)
 	p.actionBar.AddItem(importBtn, 0, 1, false)
@@ -297,9 +277,7 @@ func (p *Page) showQuickImportPage() {
 	quickList.SetBorder(true)
 	quickList.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.quick_import_title")))
 	quickList.SetTitleAlign(tview.AlignLeft)
-	quickList.SetMainTextColor(tcell.ColorWhite)
-	quickList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
-	quickList.SetSelectedTextColor(tcell.ColorBlack)
+	components.StyleSelectableList(quickList)
 
 	for _, preset := range quickPresets {
 		desc := fmt.Sprintf("%s | %s", preset.Behavior, preset.URL)
@@ -386,6 +364,12 @@ func (p *Page) deleteSelected() {
 	rp := p.providers[p.selectedIndex]
 	p.mu.Unlock()
 
+	ui.Updater.ConfirmDelete(rp.Name, func() {
+		go p.deleteProvider(rp)
+	})
+}
+
+func (p *Page) deleteProvider(rp config.RuleProviderEntry) {
 	configPath, err := config.DeleteRuleProviderFromConfig(rp.Name)
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("rp.del_fail"), err))
@@ -512,18 +496,12 @@ func (p *Page) setupPasteImport() {
 	p.pasteTextArea.SetBorder(true)
 
 	btnBar := tview.NewFlex()
-	importBtn := tview.NewButton(i18n.T("rp.import_btn"))
-	importBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	importBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	importBtn.SetSelectedFunc(func() {
+	importBtn := components.NewButton(i18n.T("rp.import_btn"), components.ButtonPrimary, func() {
 		if p.showInput {
 			go p.processPasteImportYAML()
 		}
 	})
-	cancelBtn := tview.NewButton(i18n.T("rp.cancel_btn"))
-	cancelBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	cancelBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	cancelBtn.SetSelectedFunc(func() {
+	cancelBtn := components.NewButton(i18n.T("rp.cancel_btn"), components.ButtonNormal, func() {
 		p.hidePasteImport()
 	})
 	btnBar.AddItem(tview.NewBox(), 0, 1, false)

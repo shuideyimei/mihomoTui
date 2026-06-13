@@ -1,8 +1,12 @@
 package ui
 
 import (
+	"fmt"
 	"sync"
 
+	"mihomoTui/internal/i18n"
+
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -17,8 +21,9 @@ type statusBar interface {
 }
 
 type UiUpdater struct {
-	app     *tview.Application
-	statBar statusBar
+	app      *tview.Application
+	statBar  statusBar
+	overlays *tview.Pages
 
 	queueMu   sync.Mutex
 	queueCond *sync.Cond
@@ -51,6 +56,63 @@ func (u *UiUpdater) run() {
 
 func (u *UiUpdater) SetStatusBar(statusBar statusBar) {
 	u.statBar = statusBar
+}
+
+func (u *UiUpdater) SetOverlayPages(pages *tview.Pages) {
+	u.overlays = pages
+}
+
+// ShowConfirm displays a shared confirmation dialog above the current page.
+func (u *UiUpdater) ShowConfirm(title, message string, onConfirm func()) {
+	u.showConfirm(title, message, i18n.T("common.confirm"), onConfirm)
+}
+
+func (u *UiUpdater) showConfirm(title, message, confirmLabel string, onConfirm func()) {
+	u.PostUi(func() {
+		if u.overlays == nil {
+			return
+		}
+		returnFocus := u.app.GetFocus()
+		closeModal := func() {
+			u.overlays.RemovePage("confirm")
+			if returnFocus != nil {
+				u.app.SetFocus(returnFocus)
+			}
+		}
+		modal := tview.NewModal().
+			SetText(message).
+			AddButtons([]string{i18n.T("common.cancel"), confirmLabel}).
+			SetDoneFunc(func(buttonIndex int, _ string) {
+				closeModal()
+				if buttonIndex == 1 && onConfirm != nil {
+					onConfirm()
+				}
+			})
+		modal.SetTitle(" " + title + " ")
+		modal.SetTitleAlign(tview.AlignCenter)
+		modal.SetBorderColor(ThemeFocusColor)
+		modal.SetButtonBackgroundColor(ThemeButtonBg)
+		modal.SetButtonTextColor(tcell.ColorWhite)
+		modal.SetButtonActivatedStyle(tcell.StyleDefault.Background(ThemeFocusColor).Foreground(tcell.ColorBlack))
+		modal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+			if event.Key() == tcell.KeyEscape {
+				closeModal()
+				return nil
+			}
+			return event
+		})
+		u.overlays.AddPage("confirm", modal, true, true)
+		u.app.SetFocus(modal)
+	})
+}
+
+func (u *UiUpdater) ConfirmDelete(label string, onConfirm func()) {
+	u.showConfirm(
+		i18n.T("common.delete_confirm_title"),
+		fmt.Sprintf(i18n.T("common.delete_confirm"), label),
+		i18n.T("common.delete"),
+		onConfirm,
+	)
 }
 
 func (u *UiUpdater) GetCurrentMode() string {

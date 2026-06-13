@@ -11,6 +11,7 @@ import (
 	"mihomoTui/internal/config"
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
+	"mihomoTui/internal/ui/components"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -93,13 +94,13 @@ func (r *RulesPage) setupUI() {
 	content := tview.NewFlex().SetDirection(tview.FlexRow)
 	content.AddItem(r.searchInput, 3, 0, false)
 	content.AddItem(r.table, 0, 1, true)
-	content.AddItem(r.actionBar, 3, 0, false)
-	content.AddItem(r.statusText, 3, 0, false)
+	content.AddItem(r.actionBar, 1, 0, false)
+	content.AddItem(r.statusText, 1, 0, false)
 
 	r.SetDirection(tview.FlexRow)
 	r.AddItem(content, 0, 1, true)
 
-	r.SetBorder(true)
+	r.SetBorder(false)
 	r.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.title")))
 }
 
@@ -107,6 +108,7 @@ func (r *RulesPage) setupAddForm() {
 	r.addForm = tview.NewForm()
 	r.addForm.SetBorder(true)
 	r.addForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.add_title")))
+	components.StyleFocusBorder(r.addForm)
 	r.addForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.typeDrop = tview.NewDropDown()
 	r.typeDrop.SetLabel(i18n.T("rule.type_label"))
@@ -122,11 +124,11 @@ func (r *RulesPage) setupAddForm() {
 	r.payloadInput = tview.NewInputField()
 	r.payloadInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.payloadInput.SetLabel(i18n.T("rule.content_label"))
-	r.payloadInput.SetFieldWidth(40)
+	r.payloadInput.SetFieldWidth(0)
 	r.proxyInput = tview.NewInputField()
 	r.proxyInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.proxyInput.SetLabel(i18n.T("rule.proxy_label"))
-	r.proxyInput.SetFieldWidth(20)
+	r.proxyInput.SetFieldWidth(0)
 
 	r.addForm.AddFormItem(r.typeDrop)
 	r.addForm.AddFormItem(r.payloadInput)
@@ -135,7 +137,7 @@ func (r *RulesPage) setupAddForm() {
 	r.addForm.AddButton(i18n.T("rule.cancel_btn"), r.onCancelAdd)
 	r.addForm.SetButtonsAlign(tview.AlignCenter)
 	r.addForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	r.addForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	r.addForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorBlack))
 }
 
 func (r *RulesPage) setupSearchInput() {
@@ -156,6 +158,7 @@ func (r *RulesPage) setupTable() {
 	r.table.SetSelectable(true, false)
 	r.table.SetBorder(true)
 	r.table.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.list_title")))
+	components.StyleFocusBorder(r.table)
 
 	headers := []string{i18n.T("rule.col_type"), i18n.T("rule.col_content"), i18n.T("rule.col_proxy")}
 	for i, header := range headers {
@@ -169,41 +172,15 @@ func (r *RulesPage) setupTable() {
 
 func (r *RulesPage) setupActionBar() {
 	r.actionBar = tview.NewFlex()
-	r.actionBar.SetBorder(true)
-	r.actionBar.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.actions")))
+	components.StyleActionBar(r.actionBar)
 
-	// Gray button style — no light blue
-	btnStyle := tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite)
-	btnFocus := tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite)
-
-	addBtn := tview.NewButton(i18n.T("rule.add_action"))
-	addBtn.SetStyle(btnStyle)
-	addBtn.SetActivatedStyle(btnFocus)
-	addBtn.SetSelectedFunc(r.showAddDialog)
-	deleteBtn := tview.NewButton(i18n.T("rule.del_action"))
-	deleteBtn.SetStyle(btnStyle)
-	deleteBtn.SetActivatedStyle(btnFocus)
-	deleteBtn.SetSelectedFunc(func() { go r.deleteSelected() })
-	moveUpBtn := tview.NewButton(i18n.T("rule.up_action"))
-	moveUpBtn.SetStyle(btnStyle)
-	moveUpBtn.SetActivatedStyle(btnFocus)
-	moveUpBtn.SetSelectedFunc(func() { go r.moveUp() })
-	moveDownBtn := tview.NewButton(i18n.T("rule.down_action"))
-	moveDownBtn.SetStyle(btnStyle)
-	moveDownBtn.SetActivatedStyle(btnFocus)
-	moveDownBtn.SetSelectedFunc(func() { go r.moveDown() })
-	moveToBtn := tview.NewButton(i18n.T("rule.move_action"))
-	moveToBtn.SetStyle(btnStyle)
-	moveToBtn.SetActivatedStyle(btnFocus)
-	moveToBtn.SetSelectedFunc(func() { go r.showMoveToDialog() })
-	refreshBtn := tview.NewButton(i18n.T("rule.refresh_action"))
-	refreshBtn.SetStyle(btnStyle)
-	refreshBtn.SetActivatedStyle(btnFocus)
-	refreshBtn.SetSelectedFunc(func() { go r.refresh() })
-	pasteBtn := tview.NewButton(i18n.T("rule.paste_action"))
-	pasteBtn.SetStyle(btnStyle)
-	pasteBtn.SetActivatedStyle(btnFocus)
-	pasteBtn.SetSelectedFunc(r.showPasteImport)
+	addBtn := components.NewButton(i18n.T("rule.add_action"), components.ButtonPrimary, r.showAddDialog)
+	deleteBtn := components.NewButton(i18n.T("rule.del_action"), components.ButtonDanger, func() { go r.deleteSelected() })
+	moveUpBtn := components.NewButton(i18n.T("rule.up_action"), components.ButtonNormal, func() { go r.moveUp() })
+	moveDownBtn := components.NewButton(i18n.T("rule.down_action"), components.ButtonNormal, func() { go r.moveDown() })
+	moveToBtn := components.NewButton(i18n.T("rule.move_action"), components.ButtonNormal, func() { go r.showMoveToDialog() })
+	refreshBtn := components.NewButton(i18n.T("rule.refresh_action"), components.ButtonNormal, func() { go r.refresh() })
+	pasteBtn := components.NewButton(i18n.T("rule.paste_action"), components.ButtonNormal, r.showPasteImport)
 
 	r.actionBar.AddItem(refreshBtn, 0, 1, false)
 	r.actionBar.AddItem(addBtn, 0, 1, false)
@@ -219,7 +196,7 @@ func (r *RulesPage) setupMoveToForm() {
 	r.moveToInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	r.moveToInput.SetLabel(i18n.T("rule.move_target"))
 	r.moveToInput.SetPlaceholder(i18n.T("rule.move_hint"))
-	r.moveToInput.SetFieldWidth(10)
+	r.moveToInput.SetFieldWidth(0)
 
 	r.moveToForm = tview.NewForm()
 	r.moveToForm.SetBorder(true)
@@ -232,14 +209,12 @@ func (r *RulesPage) setupMoveToForm() {
 	})
 	r.moveToForm.SetButtonsAlign(tview.AlignCenter)
 	r.moveToForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	r.moveToForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	r.moveToForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorBlack))
 }
 
 func (r *RulesPage) setupStatusText() {
 	r.statusText = tview.NewTextView()
-	r.statusText.SetBorder(true)
-	r.statusText.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.status")))
-	r.statusText.SetDynamicColors(true)
+	components.StyleStatusLine(r.statusText)
 	r.statusText.SetText(i18n.T("rule.status_ready"))
 
 }
@@ -327,18 +302,12 @@ func (r *RulesPage) setupPasteImport() {
 	r.pasteTextArea.SetBorder(true)
 
 	btnBar := tview.NewFlex()
-	importBtn := tview.NewButton(i18n.T("rule.import_btn"))
-	importBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	importBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	importBtn.SetSelectedFunc(func() {
+	importBtn := components.NewButton(i18n.T("rule.import_btn"), components.ButtonPrimary, func() {
 		if r.pasteFormVisible {
 			go r.processPasteImport()
 		}
 	})
-	cancelBtn := tview.NewButton(i18n.T("rule.import_cancel"))
-	cancelBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	cancelBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	cancelBtn.SetSelectedFunc(func() {
+	cancelBtn := components.NewButton(i18n.T("rule.import_cancel"), components.ButtonNormal, func() {
 		r.hidePasteImport()
 	})
 	btnBar.AddItem(tview.NewBox(), 0, 1, false)
@@ -559,10 +528,11 @@ func (r *RulesPage) deleteSelected() {
 		}
 		rule := r.rules[ruleIdx]
 
-		r.showStatus(fmt.Sprintf(i18n.T("rule.deleting"), rule.Type, rule.Payload, rule.Proxy))
-
-		// Launch background work with captured data
-		go r.doDelete(ruleIdx)
+		label := fmt.Sprintf("%s, %s, %s", rule.Type, rule.Payload, rule.Proxy)
+		ui.Updater.ConfirmDelete(label, func() {
+			r.showStatus(fmt.Sprintf(i18n.T("rule.deleting"), rule.Type, rule.Payload, rule.Proxy))
+			go r.doDelete(ruleIdx)
+		})
 	})
 }
 

@@ -6,6 +6,7 @@ import (
 	"mihomoTui/internal/config"
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
+	"mihomoTui/internal/ui/components"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -35,7 +36,7 @@ func newSettingsPage(cm *config.Manager, appName, appVersion string) *Settings {
 	s.AddItem(s.buildUpdateSection(), 0, 1, false)
 	s.AddItem(s.buildAboutSection(appName, appVersion), 0, 1, false)
 
-	s.SetBorder(true)
+	s.SetBorder(false)
 	s.SetTitle(fmt.Sprintf(" %s ", i18n.T("setting.title")))
 
 	return s
@@ -48,9 +49,7 @@ func (s *Settings) buildBackupSection() *tview.Flex {
 	s.statusText.SetBorder(false)
 
 	s.backupBtn = tview.NewButton(i18n.T("setting.backup_btn"))
-	s.backupBtn.SetBorder(true)
-	s.backupBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	s.backupBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	components.StyleButton(s.backupBtn, components.ButtonPrimary)
 	s.backupBtn.SetSelectedFunc(func() {
 		if err := s.configManager.Backup(); err != nil {
 			s.showStatus(fmt.Sprintf(i18n.T("setting.backup_fail"), err.Error()))
@@ -60,15 +59,15 @@ func (s *Settings) buildBackupSection() *tview.Flex {
 	})
 
 	s.restoreBtn = tview.NewButton(i18n.T("setting.restore_btn"))
-	s.restoreBtn.SetBorder(true)
-	s.restoreBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	s.restoreBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	components.StyleButton(s.restoreBtn, components.ButtonDanger)
 	s.restoreBtn.SetSelectedFunc(func() {
-		if err := s.configManager.Restore(); err != nil {
-			s.showStatus(fmt.Sprintf(i18n.T("setting.restore_fail"), err.Error()))
-		} else {
-			s.showStatus(i18n.T("setting.restore_ok"))
-		}
+		ui.Updater.ShowConfirm(i18n.T("setting.restore_btn"), i18n.T("setting.restore_confirm"), func() {
+			if err := s.configManager.Restore(); err != nil {
+				s.showStatus(fmt.Sprintf(i18n.T("setting.restore_fail"), err.Error()))
+			} else {
+				s.showStatus(i18n.T("setting.restore_ok"))
+			}
+		})
 	})
 
 	btnFlex := tview.NewFlex().
@@ -100,9 +99,7 @@ func (s *Settings) buildLangSection() *tview.Flex {
 	s.langStatus.SetText(fmt.Sprintf(i18n.T("setting.lang_current"), langDisplay))
 
 	s.langBtn = tview.NewButton(i18n.T("setting.lang_switch_btn"))
-	s.langBtn.SetBorder(true)
-	s.langBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	s.langBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	components.StyleButton(s.langBtn, components.ButtonNormal)
 	s.langBtn.SetSelectedFunc(func() {
 		// Toggle language
 		currentLang := i18n.GetLanguage()

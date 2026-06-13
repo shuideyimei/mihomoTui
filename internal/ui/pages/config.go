@@ -10,6 +10,7 @@ import (
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
+	"mihomoTui/internal/ui/components"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -55,10 +56,11 @@ func (c *ConfigPage) setupUI() {
 	c.setUpFormItems()
 	c.form.SetBorder(true)
 	c.form.SetTitle(fmt.Sprintf(" %s ", i18n.T("cfg.title")))
+	components.StyleFocusBorder(c.form)
 	c.form.SetButtonsAlign(tview.AlignCenter)
 	c.form.SetFieldBackgroundColor(ui.ThemeInputBg)
 	c.form.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	c.form.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	c.form.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorBlack))
 
 	// Add inline status as a read-only field
 	statusView := tview.NewTextView()
@@ -76,19 +78,19 @@ func (c *ConfigPage) setupUI() {
 func (c *ConfigPage) setUpFormItems() {
 	c.apiAddrField = tview.NewInputField()
 	c.apiAddrField.SetLabel(i18n.T("cfg.api_address"))
-	c.apiAddrField.SetFieldWidth(50)
+	c.apiAddrField.SetFieldWidth(0)
 	c.apiAddrField.SetFieldBackgroundColor(ui.ThemeInputBg)
 	c.form.AddFormItem(c.apiAddrField)
 
 	c.apiSecretField = tview.NewInputField()
 	c.apiSecretField.SetLabel(i18n.T("cfg.api_secret"))
-	c.apiSecretField.SetFieldWidth(50)
+	c.apiSecretField.SetFieldWidth(0)
 	c.apiSecretField.SetFieldBackgroundColor(ui.ThemeInputBg)
 	c.form.AddFormItem(c.apiSecretField)
 
 	c.httpPortField = tview.NewInputField()
 	c.httpPortField.SetLabel(i18n.T("cfg.http_port"))
-	c.httpPortField.SetFieldWidth(10)
+	c.httpPortField.SetFieldWidth(0)
 	c.httpPortField.SetFieldBackgroundColor(ui.ThemeInputBg)
 	c.httpPortField.SetAcceptanceFunc(func(textToCheck string, lastChar rune) bool {
 		if lastChar == 0 {
@@ -100,7 +102,7 @@ func (c *ConfigPage) setUpFormItems() {
 
 	c.socksPortField = tview.NewInputField()
 	c.socksPortField.SetLabel(i18n.T("cfg.socks_port"))
-	c.socksPortField.SetFieldWidth(10)
+	c.socksPortField.SetFieldWidth(0)
 	c.socksPortField.SetFieldBackgroundColor(ui.ThemeInputBg)
 	c.socksPortField.SetAcceptanceFunc(func(textToCheck string, lastChar rune) bool {
 		if lastChar == 0 {
@@ -112,7 +114,7 @@ func (c *ConfigPage) setUpFormItems() {
 
 	c.mixedPortField = tview.NewInputField()
 	c.mixedPortField.SetLabel(i18n.T("cfg.mixed_port"))
-	c.mixedPortField.SetFieldWidth(10)
+	c.mixedPortField.SetFieldWidth(0)
 	c.mixedPortField.SetFieldBackgroundColor(ui.ThemeInputBg)
 	c.mixedPortField.SetAcceptanceFunc(func(textToCheck string, lastChar rune) bool {
 		if lastChar == 0 {
@@ -124,7 +126,7 @@ func (c *ConfigPage) setUpFormItems() {
 
 	// Action buttons
 	c.form.AddButton(i18n.T("cfg.save_btn"), c.saveConfig)
-	c.form.AddButton(i18n.T("cfg.reset_btn"), c.resetConfig)
+	c.form.AddButton(i18n.T("cfg.reset_btn"), c.confirmReset)
 	c.form.AddButton(i18n.T("cfg.test_btn"), c.testConnection)
 }
 
@@ -225,6 +227,10 @@ func (c *ConfigPage) saveConfig() {
 	}
 
 	c.showStatus(i18n.T("cfg.saved_ok"))
+}
+
+func (c *ConfigPage) confirmReset() {
+	ui.Updater.ShowConfirm(i18n.T("cfg.reset_btn"), i18n.T("cfg.reset_confirm"), c.resetConfig)
 }
 
 // resetConfig resets configuration to defaults

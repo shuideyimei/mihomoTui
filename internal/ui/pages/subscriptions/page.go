@@ -12,6 +12,7 @@ import (
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/subscription"
 	"mihomoTui/internal/ui"
+	"mihomoTui/internal/ui/components"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -59,37 +60,35 @@ func (p *Page) setupUI() {
 	p.detailView.SetWordWrap(true)
 
 	p.actionBar = tview.NewFlex()
-	p.actionBar.SetBorder(true)
-	p.actionBar.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.actions")))
+	components.StyleActionBar(p.actionBar)
 	p.setupActionBar()
 
 	p.status = tview.NewTextView()
-	p.status.SetBorder(true)
-	p.status.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.status")))
-	p.status.SetDynamicColors(true)
+	components.StyleStatusLine(p.status)
 	p.status.SetText(i18n.T("sub.status_ready"))
 
 	rightPanel.AddItem(p.detailView, 0, 3, false)
-	rightPanel.AddItem(p.actionBar, 3, 0, false)
-	rightPanel.AddItem(p.status, 3, 0, false)
+	rightPanel.AddItem(p.actionBar, 1, 0, false)
+	rightPanel.AddItem(p.status, 1, 0, false)
 
 	p.importForm = tview.NewForm()
 	p.importForm.SetBorder(true)
 	p.importForm.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.import_title")))
+	components.StyleFocusBorder(p.importForm)
 	p.importForm.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput = tview.NewInputField()
 	p.nameInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.nameInput.SetLabel(i18n.T("sub.name_label"))
-	p.nameInput.SetFieldWidth(40)
+	p.nameInput.SetFieldWidth(0)
 	p.urlInput = tview.NewInputField()
 	p.urlInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.urlInput.SetLabel(i18n.T("sub.url_label"))
-	p.urlInput.SetFieldWidth(60)
+	p.urlInput.SetFieldWidth(0)
 	p.intervalInput = tview.NewInputField()
 	p.intervalInput.SetFieldBackgroundColor(ui.ThemeInputBg)
 	p.intervalInput.SetLabel(i18n.T("sub.interval_label"))
 	p.intervalInput.SetText("1440")
-	p.intervalInput.SetFieldWidth(10)
+	p.intervalInput.SetFieldWidth(0)
 
 	p.importForm.AddFormItem(p.nameInput)
 	p.importForm.AddFormItem(p.urlInput)
@@ -99,18 +98,17 @@ func (p *Page) setupUI() {
 	p.importForm.AddButton(i18n.T("sub.cancel_btn"), p.onCancelImport)
 	p.importForm.SetButtonsAlign(tview.AlignCenter)
 	p.importForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	p.importForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	p.importForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorBlack))
 
 	leftPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	leftPanel.AddItem(p.subList, 0, 1, true)
 
-	mainFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
-	mainFlex.AddItem(leftPanel, 0, 2, true)
-	mainFlex.AddItem(rightPanel, 0, 3, false)
+	mainFlex := tview.NewFlex().SetDirection(tview.FlexRow)
+	mainFlex.AddItem(components.NewResponsiveSplit(leftPanel, rightPanel, 92, 2, 3), 0, 1, true)
 
 	p.SetDirection(tview.FlexRow)
 	p.AddItem(mainFlex, 0, 1, true)
-	p.SetBorder(true)
+	p.SetBorder(false)
 	p.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.title")))
 }
 
@@ -118,9 +116,7 @@ func (p *Page) setupSubList() {
 	p.subList = tview.NewList()
 	p.subList.SetBorder(true)
 	p.subList.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.mihomo_providers")))
-	p.subList.SetMainTextColor(tcell.ColorWhite)
-	p.subList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
-	p.subList.SetSelectedTextColor(tcell.ColorBlack)
+	components.StyleSelectableList(p.subList)
 	p.subList.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 		switch ev.Key() {
 		case tcell.KeyCtrlD:
@@ -164,25 +160,10 @@ func (p *Page) setupSubList() {
 }
 
 func (p *Page) setupActionBar() {
-	btnStyle := tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite)
-	btnFocus := tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite)
-
-	refreshBtn := tview.NewButton(i18n.T("sub.refresh_action"))
-	refreshBtn.SetStyle(btnStyle)
-	refreshBtn.SetActivatedStyle(btnFocus)
-	refreshBtn.SetSelectedFunc(func() { go p.refresh() })
-	importBtn := tview.NewButton(i18n.T("sub.import_action"))
-	importBtn.SetStyle(btnStyle)
-	importBtn.SetActivatedStyle(btnFocus)
-	importBtn.SetSelectedFunc(p.showImportForm)
-	updateBtn := tview.NewButton(i18n.T("sub.update_action"))
-	updateBtn.SetStyle(btnStyle)
-	updateBtn.SetActivatedStyle(btnFocus)
-	updateBtn.SetSelectedFunc(func() { go p.updateSelected() })
-	deleteBtn := tview.NewButton(i18n.T("sub.del_action"))
-	deleteBtn.SetStyle(btnStyle)
-	deleteBtn.SetActivatedStyle(btnFocus)
-	deleteBtn.SetSelectedFunc(func() { go p.deleteSelected() })
+	refreshBtn := components.NewButton(i18n.T("sub.refresh_action"), components.ButtonNormal, func() { go p.refresh() })
+	importBtn := components.NewButton(i18n.T("sub.import_action"), components.ButtonPrimary, p.showImportForm)
+	updateBtn := components.NewButton(i18n.T("sub.update_action"), components.ButtonNormal, func() { go p.updateSelected() })
+	deleteBtn := components.NewButton(i18n.T("sub.del_action"), components.ButtonDanger, func() { go p.deleteSelected() })
 
 	p.actionBar.AddItem(refreshBtn, 0, 1, false)
 	p.actionBar.AddItem(importBtn, 0, 1, false)
@@ -366,6 +347,12 @@ func (p *Page) deleteSelected() {
 	pv := p.providers[p.selectedIndex]
 	p.mu.Unlock()
 
+	ui.Updater.ConfirmDelete(pv.Name, func() {
+		go p.deleteProvider(pv)
+	})
+}
+
+func (p *Page) deleteProvider(pv config.ProviderInfo) {
 	if err := config.RemoveProviderFromConfig(pv.Name); err != nil {
 		p.showError(fmt.Sprintf(i18n.T("sub.delete_fail"), err))
 		return

@@ -12,6 +12,7 @@ import (
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
+	"mihomoTui/internal/ui/components"
 	"mihomoTui/internal/utils"
 
 	"github.com/gdamore/tcell/v2"
@@ -101,14 +102,13 @@ func (c *ConnectionsPage) setupLayout() {
 	// Create right panel (info panel + status)
 	rightPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	rightPanel.AddItem(c.infoPanel, 0, 2, false)
-	rightPanel.AddItem(c.statusText, 3, 0, false)
+	rightPanel.AddItem(c.statusText, 1, 0, false)
 
 	// Main layout
-	c.mainFlex = tview.NewFlex().SetDirection(tview.FlexColumn)
-	c.mainFlex.AddItem(c.connectionsTable, 0, 3, true)
-	c.mainFlex.AddItem(rightPanel, 0, 2, false)
+	c.mainFlex = tview.NewFlex().SetDirection(tview.FlexRow)
+	c.mainFlex.AddItem(components.NewResponsiveSplit(c.connectionsTable, rightPanel, 110, 3, 2), 0, 1, true)
 
-	c.mainFlex.SetBorder(true)
+	c.mainFlex.SetBorder(false)
 	c.mainFlex.SetTitle(fmt.Sprintf(" %s ", i18n.T("conn.title")))
 
 	c.pages.AddPage("main", c.mainFlex, true, true)
@@ -120,6 +120,7 @@ func (c *ConnectionsPage) createConnectionsTable() {
 	c.connectionsTable = tview.NewTable().SetFixed(1, 0)
 	c.connectionsTable.SetBorder(true)
 	c.connectionsTable.SetTitle(fmt.Sprintf(" %s ", i18n.T("conn.active_conn")))
+	components.StyleFocusBorder(c.connectionsTable)
 	c.connectionsTable.SetSelectable(true, false)
 
 	// Set table headers
@@ -140,9 +141,7 @@ func (c *ConnectionsPage) createConnectionsTable() {
 // createStatusText creates the status display
 func (c *ConnectionsPage) createStatusText() {
 	c.statusText = tview.NewTextView()
-	c.statusText.SetBorder(true)
-	c.statusText.SetTitle(fmt.Sprintf(" %s ", i18n.T("conn.status")))
-	c.statusText.SetDynamicColors(true)
+	components.StyleStatusLine(c.statusText)
 	c.statusText.SetText(i18n.T("conn.initializing"))
 }
 
@@ -423,10 +422,7 @@ func (c *ConnectionsPage) createDetailView(conn *models.Connection) *tview.Flex 
 		SetWordWrap(true).
 		SetText(b.String())
 
-	closeBtn := tview.NewButton(i18n.T("conn.close_btn"))
-	closeBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	closeBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	closeBtn.SetSelectedFunc(func() {
+	closeBtn := components.NewButton(i18n.T("conn.close_btn"), components.ButtonNormal, func() {
 		c.pages.RemovePage("detail")
 		c.pages.SwitchToPage("main")
 		ui.Updater.SetFocus(c.connectionsTable)
@@ -485,7 +481,7 @@ func (c *ConnectionsPage) updateStatus() {
 	refreshCount := c.refreshCount
 	c.mutex.RUnlock()
 
-	status := fmt.Sprintf(`%d connections | Updated: %s (#%d)`,
+	status := fmt.Sprintf(i18n.T("conn.status_summary"),
 		connCount,
 		lastUpdate.Format("15:04"),
 		refreshCount,
@@ -568,10 +564,10 @@ func (c *ConnectionsPage) toggleAutoRefresh() {
 
 	if autoRefresh {
 		c.startAutoRefresh()
-		c.showSuccess("Auto-refresh on")
+		c.showSuccess(i18n.T("conn.auto_refresh_on"))
 	} else {
 		c.stopAutoRefresh()
-		c.showSuccess("Auto-refresh off")
+		c.showSuccess(i18n.T("conn.auto_refresh_off"))
 	}
 
 	c.updateStatus()

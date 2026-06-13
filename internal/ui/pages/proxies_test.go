@@ -2,6 +2,7 @@ package pages
 
 import (
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -232,5 +233,27 @@ func TestProxies_UpdateNodesListContentMovesSelectionToScrolledViewport(t *testi
 	rowOffset, columnOffset := p.nodesList.GetOffset()
 	if rowOffset != 2 || columnOffset != 0 {
 		t.Fatalf("node offset = (%d, %d), want (2, 0)", rowOffset, columnOffset)
+	}
+}
+
+func TestProxies_SearchShowsEmptyStateAndCount(t *testing.T) {
+	p := NewProxies()
+	p.proxyGroups = []*models.Proxy{
+		{Name: "Proxy", Type: "Selector", All: []string{"Alpha", "Beta"}, Now: "Alpha"},
+	}
+	p.proxiesData = map[string]*models.Proxy{
+		"Alpha": {Name: "Alpha", Type: "ss"},
+		"Beta":  {Name: "Beta", Type: "ss"},
+	}
+	p.selectedGroup = "Proxy"
+	p.filterText = "missing"
+
+	p.updateNodesListContent()
+
+	if got := p.nodesList.GetCell(1, 0).Text; got == "" || got == "-" {
+		t.Fatalf("expected a descriptive empty state, got %q", got)
+	}
+	if got := p.statusText.GetText(false); !strings.Contains(got, "0/2") {
+		t.Fatalf("expected search result count in status, got %q", got)
 	}
 }

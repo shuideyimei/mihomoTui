@@ -1,9 +1,48 @@
 package app
 
-import "github.com/gdamore/tcell/v2"
+import (
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+)
 
 // handleGlobalKeys handles global keyboard shortcuts
 func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
+	if event.Key() == tcell.KeyCtrlC ||
+		(event.Modifiers()&tcell.ModCtrl != 0 && (event.Rune() == 'q' || event.Rune() == 'Q')) {
+		a.Stop()
+		return nil
+	}
+
+	if a.showingHelp {
+		if event.Key() == tcell.KeyEscape || event.Key() == tcell.KeyF12 || event.Rune() == '?' {
+			a.hideHelp()
+			return nil
+		}
+		return event
+	}
+
+	if a.showingPalette {
+		if event.Key() == tcell.KeyEscape {
+			a.hideCommandPalette()
+			return nil
+		}
+		return event
+	}
+
+	if event.Key() == tcell.KeyEscape {
+		if _, isForm := a.app.GetFocus().(*tview.Form); isForm {
+			a.setFocus(true)
+			return nil
+		}
+	}
+
+	// Inputs, forms, drop-downs, and dialogs own their keys before global
+	// navigation. This prevents ?, Esc, and function keys from interrupting edits.
+	switch a.app.GetFocus().(type) {
+	case *tview.InputField, *tview.TextArea, *tview.Form, *tview.DropDown, *tview.Modal:
+		return event
+	}
+
 	// Check if the event is a rune event (printable character)
 	// ? can come as Rune '?' directly, or as '/' with Shift modifier on some terminals
 	isQuestionMark := event.Rune() == '?'
@@ -16,14 +55,14 @@ func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 		return nil
 	}
 
-	// F12 as alternative help shortcut
-	if event.Key() == tcell.KeyF12 {
-		a.toggleHelp()
+	if event.Rune() == ':' {
+		a.showCommandPalette()
 		return nil
 	}
 
-	if event.Key() == tcell.KeyEscape && a.showingHelp {
-		a.hideHelp()
+	// F12 as alternative help shortcut
+	if event.Key() == tcell.KeyF12 {
+		a.toggleHelp()
 		return nil
 	}
 
@@ -35,9 +74,6 @@ func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 
 	// Global keys that work regardless of focus
 	switch event.Key() {
-	case tcell.KeyCtrlC:
-		a.Stop()
-		return nil
 	case tcell.KeyF1:
 		a.switchPage(0) // Dashboard
 		return nil
@@ -51,6 +87,9 @@ func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 		a.switchPage(3) // Config
 		return nil
 	case tcell.KeyF5:
+		if a.currentPage == 2 {
+			return event
+		}
 		a.switchPage(4) // Logs
 		return nil
 	case tcell.KeyF6:
@@ -105,9 +144,6 @@ func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
 			return nil
 		case '0':
 			a.switchPage(9) // Ctrl+0: Settings
-			return nil
-		case 'q', 'Q':
-			a.Stop() // Ctrl+Q: Quit
 			return nil
 		}
 	}
@@ -165,17 +201,20 @@ func (a *App) toggleHelp() {
 
 // showHelp displays the help overlay
 func (a *App) showHelp() {
+	a.helpReturnFocus = a.app.GetFocus()
 	a.rootPages.ShowPage("help")
 	a.showingHelp = true
+	a.app.SetFocus(a.helpPage)
 }
 
 // hideHelp hides the help overlay and restores focus
 func (a *App) hideHelp() {
 	a.rootPages.HidePage("help")
 	a.showingHelp = false
-	// Pages.HidePage restores focus to the main page automatically.
-	// Ensure our internal state reflects the correct focus target.
-	if !a.focusOnNav {
-		a.setFocus(false)
+	if a.helpReturnFocus != nil {
+		a.app.SetFocus(a.helpReturnFocus)
+		a.helpReturnFocus = nil
+		return
 	}
+	a.setFocus(a.focusOnNav)
 }

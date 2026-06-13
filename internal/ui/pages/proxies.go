@@ -135,29 +135,25 @@ func (p *ProxiesPage) setupLayout() {
 	// Create left panel (groups list + switch buttons + status)
 	leftPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	leftPanel.AddItem(p.groupsList, 0, 3, true)
-	leftPanel.AddItem(p.switchButtons, 3, 0, false)
-	leftPanel.AddItem(p.statusText, 3, 0, false)
+	leftPanel.AddItem(p.switchButtons, 1, 0, false)
+	leftPanel.AddItem(p.statusText, 1, 0, false)
 
 	// Create right panel (search input + nodes list)
 	rightPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	rightPanel.AddItem(p.searchInput, 1, 0, false)
 	rightPanel.AddItem(p.nodesList, 0, 1, false)
 
-	// Main layout
-	p.SetDirection(tview.FlexColumn)
-	p.AddItem(leftPanel, 0, 1, true)
-	p.AddItem(rightPanel, 0, 2, false)
+	p.SetDirection(tview.FlexRow)
+	p.AddItem(components.NewResponsiveSplit(leftPanel, rightPanel, 96, 1, 2), 0, 1, true)
 
-	p.SetBorder(true)
+	p.SetBorder(false)
 	p.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.title")))
 }
 
 // createStatusText creates the status display
 func (p *ProxiesPage) createStatusText() {
 	p.statusText = tview.NewTextView()
-	p.statusText.SetBorder(true)
-	p.statusText.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.status")))
-	p.statusText.SetDynamicColors(true)
+	components.StyleStatusLine(p.statusText)
 	p.statusText.SetText(i18n.T("proxy.loading"))
 }
 
@@ -170,8 +166,11 @@ func (p *ProxiesPage) createSearchInput() {
 	p.searchInput.SetChangedFunc(func(text string) {
 		p.filterText = text
 		p.updateNodesListContent()
+		if text == "" {
+			p.statusText.SetText(i18n.T("proxy.loaded"))
+		}
 	})
-	p.searchInput.SetFieldWidth(30)
+	p.searchInput.SetFieldWidth(0)
 	p.searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEsc {
 			p.searchInput.SetText("")
@@ -188,27 +187,18 @@ func (p *ProxiesPage) createGroupsList() {
 	p.groupsList = tview.NewList()
 	p.groupsList.SetBorder(true)
 	p.groupsList.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.group_select")))
-	p.groupsList.SetMainTextColor(tcell.ColorWhite)
-	p.groupsList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
-	p.groupsList.SetSelectedTextColor(tcell.ColorBlack)
-	p.groupsList.SetFocusFunc(func() {
-		p.groupsList.SetSelectedBackgroundColor(ui.ThemeHighlightBg)
-	})
-	p.groupsList.SetBlurFunc(func() {
-		p.groupsList.SetSelectedBackgroundColor(ui.ThemeSelBgBlur)
-	})
+	components.StyleSelectableList(p.groupsList)
 }
 
 // createSwitchButtons creates the mode switch buttons
 func (p *ProxiesPage) createSwitchButtons() {
 	p.switchButtons = tview.NewFlex()
-	p.switchButtons.SetBorder(true)
-	p.switchButtons.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.mode_switch")))
+	components.StyleActionBar(p.switchButtons)
 
 	// Create buttons for rule, global, direct modes
-	p.ruleBtn = tview.NewButton("Rule")
-	p.globalBtn = tview.NewButton("Global")
-	p.directBtn = tview.NewButton("Direct")
+	p.ruleBtn = tview.NewButton(i18n.T("proxy.mode_rule"))
+	p.globalBtn = tview.NewButton(i18n.T("proxy.mode_global"))
+	p.directBtn = tview.NewButton(i18n.T("proxy.mode_direct"))
 
 	// Initialize button navigation
 	p.focusableButtons = []*tview.Button{p.ruleBtn, p.globalBtn, p.directBtn}
@@ -221,12 +211,9 @@ func (p *ProxiesPage) createSwitchButtons() {
 	p.updateButtonStyles()
 
 	// Gray background, no light blue
-	p.ruleBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	p.ruleBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	p.globalBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	p.globalBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
-	p.directBtn.SetStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
-	p.directBtn.SetActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorWhite))
+	components.StyleButton(p.ruleBtn, components.ButtonNormal)
+	components.StyleButton(p.globalBtn, components.ButtonNormal)
+	components.StyleButton(p.directBtn, components.ButtonNormal)
 
 	// Add button click handlers for mode switching
 	p.ruleBtn.SetSelectedFunc(func() {
@@ -260,9 +247,9 @@ func (p *ProxiesPage) createSwitchButtons() {
 // updateButtonStyles updates button labels based on current mode
 func (p *ProxiesPage) updateButtonStyles() {
 	// Use plain text with ▶ indicator on active mode
-	rLabel := "Rule"
-	gLabel := "Global"
-	dLabel := "Direct"
+	rLabel := i18n.T("proxy.mode_rule")
+	gLabel := i18n.T("proxy.mode_global")
+	dLabel := i18n.T("proxy.mode_direct")
 
 	switch p.currentMode {
 	case "rule":
@@ -305,6 +292,7 @@ func (p *ProxiesPage) createNodesList() {
 	p.nodesList = tview.NewTable().SetFixed(1, 0)
 	p.nodesList.SetBorder(true)
 	p.nodesList.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.node_list")))
+	components.StyleFocusBorder(p.nodesList)
 	p.nodesList.SetSelectable(true, false)
 
 	// Set table headers
@@ -764,6 +752,24 @@ func (p *ProxiesPage) updateNodesListContent() {
 			SetAlign(tview.AlignCenter)
 		p.nodesList.SetCell(row, 3, statusCell)
 		row++
+	}
+
+	visibleNodes := row - 1
+	if p.filterText != "" {
+		p.statusText.SetText(fmt.Sprintf(i18n.T("proxy.search_results"), visibleNodes, len(allNodes)))
+		if visibleNodes == 0 {
+			emptyCell := tview.NewTableCell(i18n.T("proxy.no_matches")).
+				SetTextColor(tcell.ColorGray).
+				SetAlign(tview.AlignCenter).
+				SetSelectable(false)
+			p.nodesList.SetCell(1, 0, emptyCell)
+			for column := 1; column < len(headers); column++ {
+				p.nodesList.SetCell(1, column, tview.NewTableCell("-").
+					SetTextColor(tcell.ColorGray).
+					SetAlign(tview.AlignCenter).
+					SetSelectable(false))
+			}
+		}
 	}
 
 	// Select first node

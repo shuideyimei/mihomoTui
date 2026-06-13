@@ -30,6 +30,7 @@ type LogsPage struct {
 	levelFilter   string
 	isPaused      bool
 	searchText    string
+	renderPending bool
 	searchInput   *tview.InputField
 	pauseBtn      *tview.Button
 	levelDropdown *tview.DropDown
@@ -217,7 +218,11 @@ func (p *LogsPage) startLogStream() {
 			}
 			if err != nil && err != context.Canceled {
 				p.addLog(fmt.Sprintf(i18n.T("log.conn_err"), err))
-				time.Sleep(5 * time.Second)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(5 * time.Second):
+				}
 			}
 
 			select {
@@ -269,26 +274,23 @@ func (p *LogsPage) formatLog(log *models.Log) string {
 
 func (p *LogsPage) addLog(logText string) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	p.logs = append(p.logs, logText)
 	if len(p.logs) > p.maxLines {
 		p.logs = p.logs[len(p.logs)-p.maxLines:]
 	}
+	schedule := !p.renderPending
+	p.renderPending = true
+	p.mu.Unlock()
 
-	p.updateTextView()
-}
-
-func (p *LogsPage) updateTextView() {
-	var b strings.Builder
-	for _, line := range p.logs {
-		b.WriteString(line)
-		b.WriteByte('\n')
+	if schedule {
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			p.mu.Lock()
+			p.renderPending = false
+			p.mu.Unlock()
+			p.refreshDisplay()
+		}()
 	}
-	content := b.String()
-	ui.Updater.PostUi(func() {
-		p.textView.SetText(content)
-	})
 }
 
 func (p *LogsPage) refreshDisplay() {

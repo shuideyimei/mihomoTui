@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
-	"syscall"
 
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
@@ -387,51 +385,8 @@ func (cm *ConfigManager) saveEdit(text string) {
 }
 
 func writeRawConfig(configPath, text string) error {
-	// Resolve symlinks to prevent sudo cp from following a malicious symlink
-	realPath, err := filepath.EvalSymlinks(configPath)
-	if err != nil {
-		return fmt.Errorf("解析配置文件路径失败: %w", err)
-	}
-
-	// Write to a temp file first, then use sudo cp to handle files
-	// owned by a different user (e.g. mihomo:mihomo at /opt/clashtui/...)
-	tmpFile, err := os.CreateTemp("", "mihomo_config_*.yaml")
-	if err != nil {
-		return fmt.Errorf("创建临时文件失败: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
-
-	if err := os.WriteFile(tmpPath, []byte(text), 0644); err != nil {
-		return fmt.Errorf("写入临时文件失败: %w", err)
-	}
-
-	// Verify the temp file is still a regular file (prevent TOCTOU swap)
-	tmpStat, err := os.Stat(tmpPath)
-	if err != nil || !tmpStat.Mode().IsRegular() {
-		return fmt.Errorf("临时文件状态异常: %v", err)
-	}
-
-	origStat, _ := os.Stat(realPath)
-
-	cmd := exec.Command("sudo", "cp", tmpPath, realPath)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("写入配置文件失败 (需要 sudo 权限): %s", string(output))
-	}
-
-	// Preserve original file ownership
-	if origStat != nil {
-		if st, ok := origStat.Sys().(*syscall.Stat_t); ok {
-			if err := exec.Command("sudo", "chown", fmt.Sprintf("%d:%d", st.Uid, st.Gid), realPath).Run(); err != nil {
-				return fmt.Errorf("恢复文件所有权失败: %w", err)
-			}
-		}
-	}
-	return nil
+	return config.WriteFileAtomic(configPath, []byte(text), 0644)
 }
-
-
 
 func (cm *ConfigManager) showDeleteConfirm() {
 	cm.mu.Lock()
@@ -447,15 +402,15 @@ func (cm *ConfigManager) showDeleteConfirm() {
 	path := files[idx]
 	label := config.FriendlyPath(path)
 
-	isCurrent := path == cm.currentConfig
+	if config.SameConfigFile(path, config.FindCurrentConfigPath()) {
+		cm.statusText.SetText(i18n.T("cmgr.delete_active_forbidden"))
+		return
+	}
 
 	textView := tview.NewTextView()
 	textView.SetDynamicColors(true)
 	textView.SetTextAlign(tview.AlignCenter)
 	warning := fmt.Sprintf(i18n.T("cmgr.delete_confirm"), tview.Escape(label))
-	if isCurrent {
-		warning += i18n.T("cmgr.delete_warn")
-	}
 	textView.SetText(warning)
 
 	deleteBtn := tview.NewButton(i18n.T("cmgr.delete_confirm_btn"))
@@ -485,6 +440,11 @@ func (cm *ConfigManager) showDeleteConfirm() {
 	flex.AddItem(nil, 0, 1, false)
 
 	deleteBtn.SetSelectedFunc(func() {
+		if config.SameConfigFile(path, config.FindCurrentConfigPath()) {
+			cm.statusText.SetText(i18n.T("cmgr.delete_active_forbidden"))
+			cm.pages.SwitchToPage("main")
+			return
+		}
 		if err := os.Remove(path); err != nil {
 			cm.statusText.SetText(fmt.Sprintf(i18n.T("cmgr.delete_fail"), tview.Escape(err.Error())))
 		} else {

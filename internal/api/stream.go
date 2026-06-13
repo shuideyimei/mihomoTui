@@ -8,6 +8,7 @@ import (
 	"io"
 	"mihomoTui/internal/models"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -75,7 +76,9 @@ func (c *HttpClient) StreamLogs(ctx context.Context, callback func(*models.Log))
 func (c *HttpClient) StreamLogsWithLevel(ctx context.Context, level string, callback func(*models.Log)) error {
 	endpoint := "/logs"
 	if level != "" {
-		endpoint = fmt.Sprintf("/logs?level=%s", level)
+		query := url.Values{}
+		query.Set("level", level)
+		endpoint = fmt.Sprintf("/logs?%s", query.Encode())
 	}
 	return c.streamLogsEndpoint(ctx, endpoint, callback)
 }

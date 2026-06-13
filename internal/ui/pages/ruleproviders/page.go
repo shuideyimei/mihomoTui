@@ -336,7 +336,7 @@ func (p *Page) hideQuickImport() {
 	}
 	p.showInput = false
 	p.mu.Unlock()
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		items := p.GetItemCount()
 		if items > 1 {
 			p.RemoveItem(p.GetItem(items - 1))
@@ -362,7 +362,7 @@ func (p *Page) importFromURL(name, url, behavior string, interval int) {
 		return
 	}
 
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		p.providers = providers
 		formWasShown := p.showInput
@@ -402,7 +402,7 @@ func (p *Page) deleteSelected() {
 		return
 	}
 
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		p.providers = providers
 		p.mu.Unlock()
@@ -423,7 +423,7 @@ func (p *Page) refresh() {
 		log.Printf("[ruleproviders] API GetRuleProviders failed: %v", apiErr)
 	}
 
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		p.providers = providers
 		p.mu.Unlock()
@@ -491,16 +491,11 @@ func (p *Page) showSelectedDetail() {
 
 func (p *Page) showError(msg string) {
 	log.Printf("[ruleproviders] error: %s", msg)
-	go ui.Updater.UpdateUi(func() { p.status.SetText(fmt.Sprintf("[red]%s[white]", msg)) })
-}
-
-func (p *Page) showSuccess(msg string) {
-	log.Printf("[ruleproviders] success: %s", msg)
-	go ui.Updater.UpdateUi(func() { p.status.SetText(fmt.Sprintf("[green]%s[white]", msg)) })
+	ui.Updater.PostUi(func() { p.status.SetText(fmt.Sprintf("[red]%s[white]", msg)) })
 }
 
 func (p *Page) showStatus(msg string) {
-	go ui.Updater.UpdateUi(func() { p.status.SetText(msg) })
+	ui.Updater.PostUi(func() { p.status.SetText(msg) })
 }
 
 type pasteProviderDef struct {
@@ -513,7 +508,7 @@ type pasteProviderDef struct {
 
 func (p *Page) setupPasteImport() {
 	p.pasteTextArea = tview.NewTextArea()
-p.pasteTextArea.SetPlaceholder(i18n.T("rp.paste_placeholder"))
+	p.pasteTextArea.SetPlaceholder(i18n.T("rp.paste_placeholder"))
 	p.pasteTextArea.SetBorder(true)
 
 	btnBar := tview.NewFlex()
@@ -643,7 +638,7 @@ func (p *Page) processPasteImportYAML() {
 	}
 
 	providersList, _ := config.GetRuleProvidersFromConfig()
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		p.providers = providersList
 		p.mu.Unlock()

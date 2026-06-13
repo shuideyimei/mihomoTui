@@ -489,16 +489,16 @@ func parseVmessURI(uri string) (map[string]interface{}, error) {
 	}
 
 	proxy := map[string]interface{}{
-		"name":     vmess.PS,
-		"type":     "vmess",
-		"server":   vmess.Add,
-		"port":     toInt(vmess.Port),
-		"uuid":     vmess.ID,
-		"alterId":  toInt(vmess.Aid),
-		"cipher":   "auto",
-		"tls":      vmess.TLS != "",
-		"network":  vmess.Net,
-		"ws-path":  vmess.Path,
+		"name":       vmess.PS,
+		"type":       "vmess",
+		"server":     vmess.Add,
+		"port":       toInt(vmess.Port),
+		"uuid":       vmess.ID,
+		"alterId":    toInt(vmess.Aid),
+		"cipher":     "auto",
+		"tls":        vmess.TLS != "",
+		"network":    vmess.Net,
+		"ws-path":    vmess.Path,
 		"ws-headers": map[string]string{},
 	}
 
@@ -519,14 +519,14 @@ func parseVmessQuery(uri string) (map[string]interface{}, error) {
 	}
 	query := u.Query()
 	return map[string]interface{}{
-		"name":   query.Get("remarks"),
-		"type":   "vmess",
-		"server": u.Hostname(),
-		"port":   parseInt(u.Port()),
-		"uuid":   query.Get("id"),
+		"name":    query.Get("remarks"),
+		"type":    "vmess",
+		"server":  u.Hostname(),
+		"port":    parseInt(u.Port()),
+		"uuid":    query.Get("id"),
 		"alterId": parseInt(query.Get("aid")),
-		"cipher": "auto",
-		"tls":    query.Get("security") == "tls",
+		"cipher":  "auto",
+		"tls":     query.Get("security") == "tls",
 	}, nil
 }
 

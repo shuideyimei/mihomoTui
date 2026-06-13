@@ -2,11 +2,52 @@ package api
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/testapi"
 )
+
+func TestNewClientIsIndependentFromGlobalClient(t *testing.T) {
+	InitClient("http://global.example", "global-secret")
+	independent := NewClient("http://independent.example/", "independent-secret")
+
+	UpdateClient("http://updated.example", "updated-secret")
+
+	independent.mu.RLock()
+	defer independent.mu.RUnlock()
+	if independent.baseURL != "http://independent.example" {
+		t.Fatalf("independent client URL changed to %q", independent.baseURL)
+	}
+	if independent.secret != "independent-secret" {
+		t.Fatalf("independent client secret changed to %q", independent.secret)
+	}
+}
+
+func TestDynamicPathSegmentsAreEscaped(t *testing.T) {
+	requestURI := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestURI <- r.RequestURI
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"name":"escaped"}`))
+	}))
+	defer srv.Close()
+
+	name := "group/name ?"
+	client := NewClient(srv.URL, "")
+	if _, err := client.GetProxy(name); err != nil {
+		t.Fatalf("GetProxy failed: %v", err)
+	}
+
+	got := <-requestURI
+	want := "/proxies/" + url.PathEscape(name)
+	if got != want {
+		t.Fatalf("expected request URI %q, got %q", want, got)
+	}
+}
 
 // assertRequest verifies that a recorded request with the given method and path exists.
 func assertRequest(t *testing.T, reqs []testapi.Request, method, path string) {

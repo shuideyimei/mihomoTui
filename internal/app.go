@@ -10,9 +10,16 @@ import (
 	"mihomoTui/internal/ui/pages"
 	rproviders "mihomoTui/internal/ui/pages/ruleproviders"
 	subscriptionspage "mihomoTui/internal/ui/pages/subscriptions"
+	"sync"
 
 	"github.com/rivo/tview"
 )
+
+type lifecycleTransition struct {
+	deactivate pages.ActivatablePage
+	activate   pages.ActivatablePage
+	stop       bool
+}
 
 // App represents the main application
 type App struct {
@@ -21,22 +28,28 @@ type App struct {
 	configManager *config.Manager
 	subMgr        *subscription.Manager
 
-	header  *components.Header
-	navBar  *components.NavBar
+	header    *components.Header
+	navBar    *components.NavBar
 	statusBar *components.StatusBar
 	content   tview.Primitive
 
-	rootLayout   *tview.Flex
-	rootPages    *tview.Pages
-	mainLayout   *tview.Flex
-	pages        *tview.Pages
-	pageNames    []string
-	currentPage  int
+	rootLayout    *tview.Flex
+	rootPages     *tview.Pages
+	mainLayout    *tview.Flex
+	pages         *tview.Pages
+	pageNames     []string
+	currentPage   int
+	pageLifecycle map[string]pages.ActivatablePage
 
-	focusOnNav bool
-	showingHelp    bool
-	appName        string
-	appVersion     string
+	lifecycleQueue chan lifecycleTransition
+	lifecycleMu    sync.Mutex
+	lifecycleStop  bool
+	stopOnce       sync.Once
+
+	focusOnNav  bool
+	showingHelp bool
+	appName     string
+	appVersion  string
 }
 
 // NewApp creates a new application instance
@@ -44,7 +57,9 @@ func NewApp(appName, appVersion string) *App {
 	return &App{
 		app:            tview.NewApplication(),
 		pageNames:      []string{"dashboard", "proxies", "connections", "config", "logs", "subscriptions", "proxygroups", "rules", "ruleproviders", "settings", "configmgr"},
-		focusOnNav: true,
+		pageLifecycle:  make(map[string]pages.ActivatablePage),
+		lifecycleQueue: make(chan lifecycleTransition, 64),
+		focusOnNav:     true,
 		appName:        appName,
 		appVersion:     appVersion,
 	}
@@ -74,6 +89,7 @@ func (a *App) Initialize() error {
 
 	// Initialize UI components
 	a.setupUI()
+	go a.runLifecycle()
 
 	// Start initialization tasks
 	go a.basicInitData()
@@ -127,8 +143,8 @@ func (a *App) setupUI() {
 
 	// Configure application
 	a.app.SetRoot(a.rootPages, true)
-	a.app.EnableMouse(true)   // Enable mouse support by default
-	a.app.EnablePaste(true)   // Enable bracketed paste mode for reliable paste handling
+	a.app.EnableMouse(true) // Enable mouse support by default
+	a.app.EnablePaste(true) // Enable bracketed paste mode for reliable paste handling
 
 	// Set global key handlers
 	a.app.SetInputCapture(a.handleGlobalKeys)
@@ -143,40 +159,49 @@ func (a *App) setupPages() {
 	dashboardPage := pages.NewDashboard()
 	dashboardPage.SetInputCapture(dashboardPage.GetInputCapture())
 	a.pages.AddPage("dashboard", dashboardPage, true, true)
+	a.pageLifecycle["dashboard"] = dashboardPage
 
 	// Proxies page
 	proxiesPage := pages.NewProxies()
 	// ProxiesPage sets its own InputCapture internally via initializeNavigation()
 	// which already includes Tab navigation and shortcuts
 	a.pages.AddPage("proxies", proxiesPage, true, false)
+	a.pageLifecycle["proxies"] = proxiesPage
 
 	// Connections page
 	connectionsPage := pages.NewConnections()
 	connectionsPage.SetInputCapture(connectionsPage.GetInputCapture())
 	a.pages.AddPage("connections", connectionsPage, true, false)
+	a.pageLifecycle["connections"] = connectionsPage
 
 	// Config page
 	configPage := pages.NewConfig(a.configManager)
 	a.pages.AddPage("config", configPage, true, false)
+	a.pageLifecycle["config"] = configPage
 
 	// Logs page
 	logsPage := pages.NewLogs()
 	a.pages.AddPage("logs", logsPage, true, false)
+	a.pageLifecycle["logs"] = logsPage
 
 	// Subscriptions page
 	subPage := subscriptionspage.NewPage(a.subMgr)
 	a.pages.AddPage("subscriptions", subPage, true, false)
+	a.pageLifecycle["subscriptions"] = subPage
 
 	proxyGroupsPage := pages.NewProxyGroups()
 	a.pages.AddPage("proxygroups", proxyGroupsPage, true, false)
+	a.pageLifecycle["proxygroups"] = proxyGroupsPage
 
 	// Rules page
 	rulesPage := pages.NewRules()
 	a.pages.AddPage("rules", rulesPage, true, false)
+	a.pageLifecycle["rules"] = rulesPage
 
 	// Rule providers page
 	rpPage := rproviders.NewPage()
 	a.pages.AddPage("ruleproviders", rpPage, true, false)
+	a.pageLifecycle["ruleproviders"] = rpPage
 
 	// Settings page
 	settingsPage := pages.NewSettings(a.configManager, a.appName, a.appVersion)
@@ -185,6 +210,7 @@ func (a *App) setupPages() {
 
 	configMgrPage := pages.NewConfigManager()
 	a.pages.AddPage("configmgr", configMgrPage, true, false)
+	a.pageLifecycle["configmgr"] = configMgrPage
 }
 
 // setupLayouts creates the application layout
@@ -213,19 +239,13 @@ func (a *App) switchPage(index int) {
 	if index >= 0 && index < len(a.pageNames) {
 		currentPageName := a.pageNames[a.currentPage]
 		if index != a.currentPage {
-			if currentPageName != "" {
-				a.deactivatePage(currentPageName)
-			}
 			// Switch to new page
 			a.currentPage = index
 			pageName := a.pageNames[index]
 			a.pages.SwitchToPage(pageName)
 			a.navBar.SelectItem(index)
 
-			// Activate new page if it's activatable
-			a.activatePage(pageName)
-
-
+			a.transitionPages(currentPageName, pageName)
 		}
 
 		// Switch focus to content when switching pages
@@ -235,25 +255,38 @@ func (a *App) switchPage(index int) {
 
 // activatePage activates a page if it implements ActivatablePage
 func (a *App) activatePage(pageName string) {
-	name, primitive := a.pages.GetFrontPage()
-	if name == pageName && primitive != nil {
-		if activatable, ok := primitive.(pages.ActivatablePage); ok {
-			go activatable.Activate()
+	a.enqueueLifecycle(lifecycleTransition{activate: a.pageLifecycle[pageName]})
+}
+
+func (a *App) transitionPages(from, to string) {
+	a.enqueueLifecycle(lifecycleTransition{
+		deactivate: a.pageLifecycle[from],
+		activate:   a.pageLifecycle[to],
+	})
+}
+
+func (a *App) enqueueLifecycle(transition lifecycleTransition) {
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
+	if a.lifecycleStop {
+		return
+	}
+	a.lifecycleQueue <- transition
+}
+
+func (a *App) runLifecycle() {
+	for transition := range a.lifecycleQueue {
+		if transition.deactivate != nil {
+			transition.deactivate.Deactivate()
+		}
+		if transition.activate != nil {
+			transition.activate.Activate()
+		}
+		if transition.stop {
+			return
 		}
 	}
 }
-
-// deactivatePage deactivates a page if it implements ActivatablePage
-func (a *App) deactivatePage(pageName string) {
-	name, primitive := a.pages.GetFrontPage()
-	if name == pageName && primitive != nil {
-		if activatable, ok := primitive.(pages.ActivatablePage); ok {
-			go activatable.Deactivate()
-		}
-	}
-}
-
-
 
 // Run starts the application
 func (a *App) Run() error {
@@ -263,15 +296,22 @@ func (a *App) Run() error {
 
 // Stop stops the application
 func (a *App) Stop() {
-	// Deactivate current page BEFORE stopping the UI goroutine
-	if a.currentPage >= 0 && a.currentPage < len(a.pageNames) {
-		currentPageName := a.pageNames[a.currentPage]
-		if currentPageName != "" {
-			a.deactivatePage(currentPageName)
+	a.stopOnce.Do(func() {
+		a.statusBar.Deactivate()
+		if a.currentPage >= 0 && a.currentPage < len(a.pageNames) {
+			currentPageName := a.pageNames[a.currentPage]
+			a.enqueueLifecycle(lifecycleTransition{
+				deactivate: a.pageLifecycle[currentPageName],
+				stop:       true,
+			})
 		}
-	}
 
-	a.app.Suspend(func() {
-		a.app.Stop()
+		a.lifecycleMu.Lock()
+		a.lifecycleStop = true
+		a.lifecycleMu.Unlock()
+
+		a.app.Suspend(func() {
+			a.app.Stop()
+		})
 	})
 }

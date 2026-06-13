@@ -276,20 +276,6 @@ func (p *Page) showEditForm() {
 	p.AddItem(p.groupForm, 0, 1, true)
 }
 
-func (p *Page) hideForm() {
-	p.mu.Lock()
-	if !p.showInput {
-		p.mu.Unlock()
-		return
-	}
-	p.showInput = false
-	p.editingGroup = ""
-	p.mu.Unlock()
-	go ui.Updater.UpdateUi(func() {
-		p.RemoveItem(p.groupForm)
-	})
-}
-
 func (p *Page) onSaveClicked() {
 	name := strings.TrimSpace(p.nameInput.GetText())
 	if name == "" {
@@ -368,7 +354,7 @@ func (p *Page) saveGroup(name, groupType, filter, testURL string, use, proxies [
 		return
 	}
 
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		p.groups = groups
 		formWasShown := p.showInput
@@ -414,7 +400,7 @@ func (p *Page) deleteSelected() {
 		return
 	}
 
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		p.groups = groups
 		p.mu.Unlock()
@@ -429,7 +415,7 @@ func (p *Page) refresh() {
 		p.showError(fmt.Sprintf(i18n.T("pg.config_read_fail"), err))
 		return
 	}
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		p.groups = groups
 		p.mu.Unlock()
@@ -449,7 +435,7 @@ func (p *Page) updateGroupList() {
 	}
 
 	for _, g := range groups {
-		sec := fmt.Sprintf("%s", g.Type)
+		sec := g.Type
 		if len(g.Proxies) > 0 {
 			sec += fmt.Sprintf(i18n.T("pg.node_count"), len(g.Proxies))
 		}
@@ -501,14 +487,9 @@ func (p *Page) showSelectedDetail() {
 
 func (p *Page) showError(msg string) {
 	log.Printf("[proxygroups] error: %s", msg)
-	go ui.Updater.UpdateUi(func() { p.status.SetText(fmt.Sprintf("[red]%s[white]", msg)) })
-}
-
-func (p *Page) showSuccess(msg string) {
-	log.Printf("[proxygroups] success: %s", msg)
-	go ui.Updater.UpdateUi(func() { p.status.SetText(fmt.Sprintf("[green]%s[white]", msg)) })
+	ui.Updater.PostUi(func() { p.status.SetText(fmt.Sprintf("[red]%s[white]", msg)) })
 }
 
 func (p *Page) showStatus(msg string) {
-	go ui.Updater.UpdateUi(func() { p.status.SetText(msg) })
+	ui.Updater.PostUi(func() { p.status.SetText(msg) })
 }

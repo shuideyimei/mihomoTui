@@ -4,14 +4,14 @@ import "time"
 
 // UpdateTask represents a single background update task.
 type UpdateTask struct {
-	ID            string        `json:"id"`
+	ID             string       `json:"id"`
 	SubscriptionID string       `json:"subscription_id"`
-	Status        UpdateStatus  `json:"status"`
-	StartTime     time.Time     `json:"start_time"`
-	EndTime       time.Time     `json:"end_time,omitempty"`
-	Error         string        `json:"error,omitempty"`
-	Attempt       int           `json:"attempt"`
-	MaxAttempts   int           `json:"max_attempts"`
+	Status         UpdateStatus `json:"status"`
+	StartTime      time.Time    `json:"start_time"`
+	EndTime        time.Time    `json:"end_time,omitempty"`
+	Error          string       `json:"error,omitempty"`
+	Attempt        int          `json:"attempt"`
+	MaxAttempts    int          `json:"max_attempts"`
 }
 
 // UpdateStatus represents the status of an update task.
@@ -38,18 +38,18 @@ type UpdaterStatus struct {
 
 // CacheEntry is a single item in the node cache.
 type CacheEntry struct {
-	Key       string      `json:"key"`
-	Value     interface{} `json:"value"`
-	ExpireAt  time.Time   `json:"expire_at,omitempty"`
+	Key      string      `json:"key"`
+	Value    interface{} `json:"value"`
+	ExpireAt time.Time   `json:"expire_at,omitempty"`
 }
 
 // ReloadEvent records a single config reload attempt.
 type ReloadEvent struct {
-	ID        string    `json:"id"`
-	ProfileID string    `json:"profile_id"`
-	ConfigPath string   `json:"config_path"`
-	Time      time.Time `json:"time"`
-	Success   bool      `json:"success"`
-	Error     string    `json:"error,omitempty"`
-	RolledBack bool     `json:"rolled_back,omitempty"`
+	ID         string    `json:"id"`
+	ProfileID  string    `json:"profile_id"`
+	ConfigPath string    `json:"config_path"`
+	Time       time.Time `json:"time"`
+	Success    bool      `json:"success"`
+	Error      string    `json:"error,omitempty"`
+	RolledBack bool      `json:"rolled_back,omitempty"`
 }

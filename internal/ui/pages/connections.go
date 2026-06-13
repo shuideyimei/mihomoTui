@@ -461,10 +461,6 @@ func (c *ConnectionsPage) createDetailView(conn *models.Connection) *tview.Flex 
 	return vFlex
 }
 
-func (c *ConnectionsPage) focusTable() {
-	ui.Updater.SetFocus(c.connectionsTable)
-}
-
 // formatChains formats proxy chains for display
 func (c *ConnectionsPage) formatChains(chains []string) string {
 	if len(chains) == 0 {

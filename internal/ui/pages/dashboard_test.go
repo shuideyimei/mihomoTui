@@ -17,7 +17,7 @@ import (
 //   - GET /configs     — used by periodicUpdates → updateProxyStatusData
 //   - GET /connections — used by periodicUpdates → updateConnectionsData
 //   - GET /memory      — blocks until request context is cancelled, simulating
-//                        the long-lived SSE connection of the real /memory endpoint
+//     the long-lived SSE connection of the real /memory endpoint
 //
 // The /memory handler is designed so that startStreamMemoryUsage exits promptly
 // when Deactivate cancels the dashboard's context, avoiding a 5-second retry sleep.

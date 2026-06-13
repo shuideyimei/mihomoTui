@@ -115,8 +115,7 @@ func (m *Manager) Save() error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	// Write to file
-	if err := os.WriteFile(m.configPath, data, 0600); err != nil {
+	if err := WriteFileAtomic(m.configPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -186,7 +185,7 @@ func (m *Manager) Backup() error {
 	}
 
 	// Write backup
-	if err := os.WriteFile(backupPath, data, 0600); err != nil {
+	if err := WriteFileAtomic(backupPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write backup: %w", err)
 	}
 
@@ -240,7 +239,7 @@ func (m *Manager) Export(path string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := WriteFileAtomic(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write export file: %w", err)
 	}
 

@@ -34,7 +34,7 @@ func (fn *FocusNavigator) Next() {
 		return
 	}
 	fn.index = (fn.index + 1) % len(fn.components)
-	go ui.Updater.SetFocus(fn.components[fn.index])
+	ui.Updater.SetFocus(fn.components[fn.index])
 }
 
 // Prev moves focus to the previous component (wraps around).
@@ -43,7 +43,7 @@ func (fn *FocusNavigator) Prev() {
 		return
 	}
 	fn.index = (fn.index - 1 + len(fn.components)) % len(fn.components)
-	go ui.Updater.SetFocus(fn.components[fn.index])
+	ui.Updater.SetFocus(fn.components[fn.index])
 }
 
 // Index returns the current focus index.

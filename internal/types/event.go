@@ -18,13 +18,13 @@ const (
 	EventProfileDeleted     EventType = "profile:deleted"
 
 	// Config events
-	EventConfigReloaded  EventType = "config:reloaded"
+	EventConfigReloaded   EventType = "config:reloaded"
 	EventConfigRolledBack EventType = "config:rolled_back"
-	EventConfigError     EventType = "config:error"
+	EventConfigError      EventType = "config:error"
 
 	// Proxy group events
-	EventProxyGroupImported  EventType = "proxygroup:imported"
-	EventProxyGroupResolved  EventType = "proxygroup:resolved"
+	EventProxyGroupImported EventType = "proxygroup:imported"
+	EventProxyGroupResolved EventType = "proxygroup:resolved"
 
 	// Update events
 	EventUpdateStarted EventType = "update:started"
@@ -32,8 +32,8 @@ const (
 	EventUpdateFailed  EventType = "update:failed"
 
 	// Cache events
-	EventCacheCleared       EventType = "cache:cleared"
-	EventCacheNodeUpdated   EventType = "cache:node_updated"
+	EventCacheCleared     EventType = "cache:cleared"
+	EventCacheNodeUpdated EventType = "cache:node_updated"
 )
 
 // Event is a generic event on the event bus.

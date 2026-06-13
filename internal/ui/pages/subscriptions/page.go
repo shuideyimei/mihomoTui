@@ -9,8 +9,8 @@ import (
 
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
-	"mihomoTui/internal/subscription"
 	"mihomoTui/internal/i18n"
+	"mihomoTui/internal/subscription"
 	"mihomoTui/internal/ui"
 
 	"github.com/gdamore/tcell/v2"
@@ -271,7 +271,7 @@ func (p *Page) importFromURL(name, subURL string) {
 		return
 	}
 
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		p.providers = providers
 		formWasShown := p.showInput
@@ -297,7 +297,7 @@ func (p *Page) importFromLocal(name, path string) {
 
 	log.Printf("[subs] parsed %d proxies from %s", len(doc.Proxies), name)
 
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		formWasShown := p.showInput
 		p.showInput = false
@@ -347,7 +347,7 @@ func (p *Page) updateSelected() {
 		return
 	}
 
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		p.providers = providers
 		p.mu.Unlock()
@@ -382,7 +382,7 @@ func (p *Page) deleteSelected() {
 		return
 	}
 
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		p.providers = providers
 		p.mu.Unlock()
@@ -397,7 +397,7 @@ func (p *Page) refresh() {
 		p.showError(fmt.Sprintf(i18n.T("sub.config_read_fail"), err))
 		return
 	}
-	go ui.Updater.UpdateUi(func() {
+	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		p.providers = providers
 		p.mu.Unlock()
@@ -448,14 +448,9 @@ func (p *Page) showSelectedDetail() {
 
 func (p *Page) showError(msg string) {
 	log.Printf("[subs] error: %s", msg)
-	go ui.Updater.UpdateUi(func() { p.status.SetText(fmt.Sprintf("[red]%s[white]", msg)) })
-}
-
-func (p *Page) showSuccess(msg string) {
-	log.Printf("[subs] success: %s", msg)
-	go ui.Updater.UpdateUi(func() { p.status.SetText(fmt.Sprintf("[green]%s[white]", msg)) })
+	ui.Updater.PostUi(func() { p.status.SetText(fmt.Sprintf("[red]%s[white]", msg)) })
 }
 
 func (p *Page) showStatus(msg string) {
-	go ui.Updater.UpdateUi(func() { p.status.SetText(msg) })
+	ui.Updater.PostUi(func() { p.status.SetText(msg) })
 }

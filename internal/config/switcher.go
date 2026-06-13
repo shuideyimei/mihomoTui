@@ -6,114 +6,62 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
-// FindAllConfigFiles discovers all available mihomo config.yaml files on the system.
-// It checks:
-//  1. Config directories from running mihomo processes (via findMihomoProcessConfig)
-//  2. Well-known paths: /etc/mihomo/, ~/.config/mihomo/, /opt/clashtui/
-//  3. Current working directory
-//  4. ~/.config/mihomoTui/configs/ (user-placed configs)
-//
-// Results are deduplicated and sorted. Only files that exist and are readable are returned.
+// FindAllConfigFiles discovers valid Mihomo configs from explicit, active, and
+// well-known locations. It deliberately does not scan the current directory.
 func FindAllConfigFiles() []string {
 	seen := make(map[string]bool)
 	var results []string
 
 	addUnique := func(path string) {
-		if seen[path] {
+		path = filepath.Clean(path)
+		if seen[path] || ValidateConfigFile(path) != nil {
 			return
 		}
 		seen[path] = true
 		results = append(results, path)
 	}
 
-	// 1. Configs from running mihomo processes
-	if procDirs := findMihomoProcessConfig(); len(procDirs) > 0 {
-		for _, dir := range procDirs {
-			p := filepath.Join(dir, "config.yaml")
-			if fileExists(p) {
-				addUnique(p)
-			}
-		}
+	if path := explicitMihomoConfigPath(); path != "" {
+		addUnique(path)
 	}
 
-	// 2. Well-known single-file locations
+	for _, dir := range findMihomoProcessConfig() {
+		addUnique(filepath.Join(dir, "config.yaml"))
+	}
+
 	wellKnown := []string{
 		"/opt/clashtui/mihomo/config/config.yaml",
 		"/etc/mihomo/config.yaml",
 		filepath.Join(os.ExpandEnv("$HOME"), ".config", "mihomo", "config.yaml"),
 	}
 	for _, p := range wellKnown {
-		if fileExists(p) {
-			addUnique(p)
-		}
+		addUnique(p)
 	}
 
-	// 3. Scan /etc/mihomo/ for all *.yaml files (or just config.yaml)
-	etcDir := "/etc/mihomo"
-	if info, err := os.Stat(etcDir); err == nil && info.IsDir() {
-		entries, err := os.ReadDir(etcDir)
-		if err == nil {
-			for _, e := range entries {
-				if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-					p := filepath.Join(etcDir, e.Name())
-					if fileExists(p) {
-						addUnique(p)
-					}
-				}
+	dirs := []string{
+		"/etc/mihomo",
+		filepath.Join(os.ExpandEnv("$HOME"), ".config", "mihomo"),
+	}
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := strings.ToLower(entry.Name())
+			if strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml") {
+				addUnique(filepath.Join(dir, entry.Name()))
 			}
 		}
 	}
 
-	// 4. Scan ~/.config/mihomo/ for all *.yaml files
-	mihomoCfgDir := filepath.Join(os.ExpandEnv("$HOME"), ".config", "mihomo")
-	if info, err := os.Stat(mihomoCfgDir); err == nil && info.IsDir() {
-		entries, err := os.ReadDir(mihomoCfgDir)
-		if err == nil {
-			for _, e := range entries {
-				if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-					p := filepath.Join(mihomoCfgDir, e.Name())
-					if fileExists(p) {
-						addUnique(p)
-					}
-				}
-			}
-		}
-	}
-
-	// 5. Current working directory
-	if wd, err := os.Getwd(); err == nil {
-		entries, err := os.ReadDir(wd)
-		if err == nil {
-			for _, e := range entries {
-				if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-					p := filepath.Join(wd, e.Name())
-					if fileExists(p) {
-						addUnique(p)
-					}
-				}
-			}
-		}
-	}
-
-	// 6. ~/.config/mihomo/ — user can place config files here (must be under Mihomo's home dir)
-	userCfgDir := filepath.Join(os.ExpandEnv("$HOME"), ".config", "mihomo")
-	if info, err := os.Stat(userCfgDir); err == nil && info.IsDir() {
-		entries, err := os.ReadDir(userCfgDir)
-		if err == nil {
-			for _, e := range entries {
-				if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-					p := filepath.Join(userCfgDir, e.Name())
-					if fileExists(p) {
-						addUnique(p)
-					}
-				}
-			}
-		}
-	}
-
-	// Sort for consistent ordering
 	sort.Strings(results)
 	return results
 }
@@ -122,6 +70,21 @@ func FindAllConfigFiles() []string {
 // It is a convenience wrapper around FindMihomoConfigPath.
 func FindCurrentConfigPath() string {
 	return FindMihomoConfigPath()
+}
+
+// SameConfigFile reports whether two paths refer to the same config file.
+func SameConfigFile(first, second string) bool {
+	if first == "" || second == "" {
+		return false
+	}
+	firstInfo, firstErr := os.Stat(first)
+	secondInfo, secondErr := os.Stat(second)
+	if firstErr == nil && secondErr == nil {
+		return os.SameFile(firstInfo, secondInfo)
+	}
+	firstAbs, firstAbsErr := filepath.Abs(first)
+	secondAbs, secondAbsErr := filepath.Abs(second)
+	return firstAbsErr == nil && secondAbsErr == nil && filepath.Clean(firstAbs) == filepath.Clean(secondAbs)
 }
 
 // fileExists checks whether a file exists and is readable.
@@ -143,8 +106,8 @@ func FriendlyPath(path string) string {
 	return path
 }
 
-// ValidateConfigFile checks that the given path points to a readable YAML file
-// that looks like a mihomo config (has a "port" or "mixed-port" or "proxies" key).
+// ValidateConfigFile checks that the path is a readable YAML mapping with at
+// least one known Mihomo top-level key.
 func ValidateConfigFile(path string) error {
 	if !fileExists(path) {
 		return fmt.Errorf("文件不存在: %s", path)
@@ -153,13 +116,25 @@ func ValidateConfigFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("无法读取文件: %w", err)
 	}
-	content := string(data)
-	// Quick check: look for common mihomo config top-level keys
-	if !strings.Contains(content, "port:") &&
-		!strings.Contains(content, "mixed-port:") &&
-		!strings.Contains(content, "proxies:") &&
-		!strings.Contains(content, "proxy-groups:") {
-		return fmt.Errorf("文件不是有效的 mihomo 配置文件")
+
+	var root map[string]interface{}
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return fmt.Errorf("YAML 格式错误: %w", err)
 	}
-	return nil
+
+	knownKeys := []string{
+		"port", "socks-port", "redir-port", "tproxy-port", "mixed-port",
+		"allow-lan", "bind-address", "mode", "log-level", "ipv6",
+		"external-controller", "external-ui", "secret", "authentication",
+		"interface-name", "routing-mark", "find-process-mode",
+		"dns", "hosts", "profile", "tun", "sniffer",
+		"proxies", "proxy-groups", "proxy-providers", "rule-providers", "rules",
+		"geodata-mode", "geox-url", "global-client-fingerprint",
+	}
+	for _, key := range knownKeys {
+		if _, ok := root[key]; ok {
+			return nil
+		}
+	}
+	return fmt.Errorf("文件不是有效的 mihomo 配置文件")
 }

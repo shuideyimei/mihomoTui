@@ -121,8 +121,9 @@ secret: ""                          # 可选，建议设置
 
 TUI 通过以下方式寻找 Mihomo 的 `config.yaml`：
 
-1. 扫描 `/proc` 查找运行中的 mihomo 进程及其 `-d` / `--directory` 参数
-2. 回退到常见位置：
+1. 优先使用显式设置的 `MIHOMO_CONFIG_PATH`
+2. 扫描 `/proc` 查找运行中的 mihomo 进程及其 `-d` / `--directory` 参数
+3. 回退到常见位置：
    - `/etc/mihomo/config.yaml`
    - `~/.config/mihomo/config.yaml`
 

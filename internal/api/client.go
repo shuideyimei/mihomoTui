@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,8 +20,7 @@ import (
 )
 
 var (
-	stopLogSync context.CancelFunc
-	logFile     *os.File
+	logFile *os.File
 )
 
 // InitLogging sets up the application log file. Should be called once at startup.
@@ -49,7 +49,6 @@ func InitLogging() func() {
 	logFile = f
 
 	ctx, cancel := context.WithCancel(context.Background())
-	stopLogSync = cancel
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
@@ -86,31 +85,43 @@ type HttpClient struct {
 }
 
 func InitClient(baseURL, secret string) {
-	Client = &HttpClient{
-		baseURL: baseURL,
-		secret:  secret,
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
-	}
+	Client = NewClient(baseURL, secret)
+	StreamClient = NewStreamClient(baseURL, secret)
+}
 
-	StreamClient = &HttpClient{
-		baseURL: baseURL,
+// NewClient returns an independent API client for regular requests.
+func NewClient(baseURL, secret string) *HttpClient {
+	return newHTTPClient(baseURL, secret, 10*time.Second)
+}
+
+// NewStreamClient returns an independent API client without a request timeout.
+func NewStreamClient(baseURL, secret string) *HttpClient {
+	return newHTTPClient(baseURL, secret, 0)
+}
+
+func newHTTPClient(baseURL, secret string, timeout time.Duration) *HttpClient {
+	return &HttpClient{
+		baseURL: strings.TrimRight(baseURL, "/"),
 		secret:  secret,
 		httpClient: &http.Client{
-			Timeout: 0, // No timeout for streaming
+			Timeout: timeout,
 		},
 	}
 }
 
 func UpdateClient(baseURL, secret string) {
+	if Client == nil || StreamClient == nil {
+		InitClient(baseURL, secret)
+		return
+	}
+
 	Client.mu.Lock()
-	Client.baseURL = baseURL
+	Client.baseURL = strings.TrimRight(baseURL, "/")
 	Client.secret = secret
 	Client.mu.Unlock()
 
 	StreamClient.mu.Lock()
-	StreamClient.baseURL = baseURL
+	StreamClient.baseURL = strings.TrimRight(baseURL, "/")
 	StreamClient.secret = secret
 	StreamClient.mu.Unlock()
 
@@ -270,7 +281,7 @@ func (c *HttpClient) GetProviders() (*models.ProvidersResponse, error) {
 
 // TestGroupDelay tests the delay of all proxies in a group and returns delay data
 func (c *HttpClient) TestGroupDelay(groupName string, testURL string, timeout int) (map[string]int, error) {
-	endpoint := fmt.Sprintf("/group/%s/delay", groupName)
+	endpoint := fmt.Sprintf("/group/%s/delay", url.PathEscape(groupName))
 
 	query := url.Values{}
 	if testURL != "" {
@@ -299,7 +310,7 @@ func (c *HttpClient) TestGroupDelay(groupName string, testURL string, timeout in
 
 // GetProxy retrieves a specific proxy
 func (c *HttpClient) GetProxy(name string) (*models.Proxy, error) {
-	endpoint := fmt.Sprintf("/proxies/%s", name)
+	endpoint := fmt.Sprintf("/proxies/%s", url.PathEscape(name))
 	resp, err := c.makeRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -320,7 +331,7 @@ func (c *HttpClient) GetProxy(name string) (*models.Proxy, error) {
 
 // SelectProxy selects a proxy for a group
 func (c *HttpClient) SelectProxy(groupName, proxyName string) error {
-	endpoint := fmt.Sprintf("/proxies/%s", groupName)
+	endpoint := fmt.Sprintf("/proxies/%s", url.PathEscape(groupName))
 	body := map[string]string{"name": proxyName}
 
 	resp, err := c.makeRequest("PUT", endpoint, body)
@@ -338,7 +349,7 @@ func (c *HttpClient) SelectProxy(groupName, proxyName string) error {
 
 // TestProxyDelay tests the delay of a proxy
 func (c *HttpClient) TestProxyDelay(name string, testURL string, timeout int) (int, error) {
-	endpoint := fmt.Sprintf("/proxies/%s/delay", name)
+	endpoint := fmt.Sprintf("/proxies/%s/delay", url.PathEscape(name))
 
 	query := url.Values{}
 	if testURL != "" {
@@ -413,7 +424,7 @@ func (c *HttpClient) GetRuleProviders() (*models.RuleProvidersResponse, error) {
 
 // RefreshRuleProvider triggers an update for a specific rule provider
 func (c *HttpClient) RefreshRuleProvider(name string) error {
-	endpoint := fmt.Sprintf("/providers/rules/%s", name)
+	endpoint := fmt.Sprintf("/providers/rules/%s", url.PathEscape(name))
 	resp, err := c.makeRequest("PUT", endpoint, nil)
 	if err != nil {
 		return err
@@ -452,7 +463,7 @@ func (c *HttpClient) GetConnections() ([]models.Connection, error) {
 
 // CloseConnection closes a specific connection
 func (c *HttpClient) CloseConnection(id string) error {
-	endpoint := fmt.Sprintf("/connections/%s", id)
+	endpoint := fmt.Sprintf("/connections/%s", url.PathEscape(id))
 	resp, err := c.makeRequest("DELETE", endpoint, nil)
 	if err != nil {
 		return err

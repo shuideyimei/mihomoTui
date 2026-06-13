@@ -5,6 +5,7 @@ go 1.24.1
 require (
 	github.com/gdamore/tcell/v2 v2.8.1
 	github.com/rivo/tview v0.0.0-20250625164341-a4a78f1e05cb
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -15,5 +16,4 @@ require (
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

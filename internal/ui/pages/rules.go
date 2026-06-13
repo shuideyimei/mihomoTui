@@ -28,10 +28,10 @@ type RulesPage struct {
 	rules      []RuleDisplay
 	filterText string
 
-	addForm       *tview.Form
-	typeDrop      *tview.DropDown
-	payloadInput  *tview.InputField
-	proxyInput    *tview.InputField
+	addForm        *tview.Form
+	typeDrop       *tview.DropDown
+	payloadInput   *tview.InputField
+	proxyInput     *tview.InputField
 	addFormVisible bool
 
 	pasteTextArea    *tview.TextArea
@@ -295,7 +295,7 @@ func (r *RulesPage) setupEventHandlers() {
 			}
 			return nil
 		case '/':
-			go ui.Updater.SetFocus(r.searchInput)
+			ui.Updater.SetFocus(r.searchInput)
 			return nil
 		}
 		return event

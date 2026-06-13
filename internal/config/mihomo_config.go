@@ -3,12 +3,10 @@ package config
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 
 	"gopkg.in/yaml.v3"
 )
@@ -19,9 +17,9 @@ var configMu sync.RWMutex
 
 // proxy-group types
 const (
-	GroupTypeSelect     = "select"
-	GroupTypeURLTest    = "url-test"
-	GroupTypeFallback   = "fallback"
+	GroupTypeSelect      = "select"
+	GroupTypeURLTest     = "url-test"
+	GroupTypeFallback    = "fallback"
 	GroupTypeLoadBalance = "load-balance"
 )
 
@@ -36,9 +34,9 @@ type MihomoConfig struct {
 
 // ProxyProviderEntry is a single proxy-provider definition
 type ProxyProviderEntry struct {
-	Type     string `yaml:"type"`
-	URL      string `yaml:"url"`
-	Interval int    `yaml:"interval"`
+	Type        string `yaml:"type"`
+	URL         string `yaml:"url"`
+	Interval    int    `yaml:"interval"`
 	HealthCheck *struct {
 		Enable   bool   `yaml:"enable"`
 		URL      string `yaml:"url"`
@@ -145,14 +143,16 @@ func RemoveProviderFromConfig(name string) error {
 
 // FindMihomoConfigPath tries to locate the mihomo config.yaml
 func FindMihomoConfigPath() string {
+	if path := explicitMihomoConfigPath(); path != "" {
+		return path
+	}
+
 	// Try to find from running mihomo process
 	paths := findMihomoProcessConfig()
-	if paths != nil {
-		for _, p := range paths {
-			configPath := p + "/config.yaml"
-			if _, err := os.Stat(configPath); err == nil {
-				return configPath
-			}
+	for _, p := range paths {
+		configPath := filepath.Join(p, "config.yaml")
+		if fileExists(configPath) {
+			return configPath
 		}
 	}
 	// Fallback: check common locations
@@ -162,95 +162,93 @@ func FindMihomoConfigPath() string {
 		os.ExpandEnv("$HOME/.config/mihomo/config.yaml"),
 	}
 	for _, p := range commonPaths {
-		if _, err := os.Stat(p); err == nil {
+		if fileExists(p) {
 			return p
 		}
 	}
 	return ""
 }
 
+func explicitMihomoConfigPath() string {
+	path := strings.TrimSpace(os.Getenv("MIHOMO_CONFIG_PATH"))
+	if path == "" {
+		return ""
+	}
+	path = filepath.Clean(os.ExpandEnv(path))
+	if !fileExists(path) {
+		return ""
+	}
+	return path
+}
+
 // findMihomoProcessConfig returns config dirs from running mihomo processes
 func findMihomoProcessConfig() []string {
-	// List /proc to find mihomo processes
-	entries, err := os.ReadDir("/proc")
+	return findMihomoProcessConfigAt("/proc")
+}
+
+func findMihomoProcessConfigAt(procRoot string) []string {
+	entries, err := os.ReadDir(procRoot)
 	if err != nil {
 		return nil
 	}
 
 	var paths []string
+	seen := make(map[string]bool)
+	addPath := func(raw string) {
+		if strings.TrimSpace(raw) == "" {
+			return
+		}
+		dir := filepath.Clean(raw)
+		if !seen[dir] {
+			seen[dir] = true
+			paths = append(paths, dir)
+		}
+	}
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-		// Try to read cmdline
-		data, err := os.ReadFile("/proc/" + entry.Name() + "/cmdline")
+		processDir := filepath.Join(procRoot, entry.Name())
+		if !isMihomoProcess(processDir) {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(processDir, "cmdline"))
 		if err != nil {
 			continue
 		}
 		args := strings.Split(string(data), "\x00")
 		for i, arg := range args {
 			if (arg == "-d" || arg == "--directory") && i+1 < len(args) {
-				paths = append(paths, args[i+1])
+				addPath(args[i+1])
+			}
+			if strings.HasPrefix(arg, "-d=") || strings.HasPrefix(arg, "--directory=") {
+				addPath(strings.SplitN(arg, "=", 2)[1])
 			}
 		}
 	}
 	return paths
 }
 
-// writeConfig writes the YAML document to the config file with sudo + ownership + permissions preservation.
-// Resolves symlinks before writing to prevent symlink-following attacks.
+func isMihomoProcess(processDir string) bool {
+	if comm, err := os.ReadFile(filepath.Join(processDir, "comm")); err == nil {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(string(comm))), "mihomo") {
+			return true
+		}
+	}
+	if exe, err := os.Readlink(filepath.Join(processDir, "exe")); err == nil {
+		name := strings.TrimSuffix(filepath.Base(exe), " (deleted)")
+		return strings.HasPrefix(strings.ToLower(name), "mihomo")
+	}
+	return false
+}
+
+// writeConfig writes the YAML document to the config file atomically.
 func writeConfig(doc *yaml.Node, configPath string) error {
 	out, err := yaml.Marshal(doc)
 	if err != nil {
 		return fmt.Errorf("序列化配置失败: %w", err)
 	}
-
-	// Resolve symlinks to prevent sudo cp from following a malicious symlink
-	realPath, err := filepath.EvalSymlinks(configPath)
-	if err != nil {
-		return fmt.Errorf("解析配置文件路径失败: %w", err)
-	}
-
-	tmpFile, err := os.CreateTemp("", "mihomo_config_*.yaml")
-	if err != nil {
-		return fmt.Errorf("创建临时文件失败: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
-
-	if err := os.WriteFile(tmpPath, []byte(out), 0644); err != nil {
-		return fmt.Errorf("写入临时文件失败: %w", err)
-	}
-
-	// Verify the temp file is still a regular file (prevent TOCTOU swap)
-	tmpStat, err := os.Stat(tmpPath)
-	if err != nil || !tmpStat.Mode().IsRegular() {
-		return fmt.Errorf("临时文件状态异常: %w", err)
-	}
-
-	origStat, statErr := os.Stat(realPath)
-
-	cmd := exec.Command("sudo", "cp", tmpPath, realPath)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("写入配置文件失败 (需要 sudo 权限): %s", string(output))
-	}
-
-	// Restore original ownership and permissions if the file existed before
-	if statErr == nil && origStat != nil {
-		// Restore ownership (user:group)
-		if st, ok := origStat.Sys().(*syscall.Stat_t); ok {
-			if chownErr := exec.Command("sudo", "chown", fmt.Sprintf("%d:%d", st.Uid, st.Gid), realPath).Run(); chownErr != nil {
-				return fmt.Errorf("恢复文件所有权失败: %w", chownErr)
-			}
-		}
-		// Restore file permissions (e.g., 0644) — sudo cp with default umask may change them
-		perm := fmt.Sprintf("%o", origStat.Mode().Perm())
-		if chmodErr := exec.Command("sudo", "chmod", perm, realPath).Run(); chmodErr != nil {
-			return fmt.Errorf("恢复文件权限失败: %w", chmodErr)
-		}
-	}
-	return nil
+	return WriteFileAtomic(configPath, out, 0644)
 }
 
 // parseConfig reads and parses the mihomo config file
@@ -672,6 +670,7 @@ func DeleteGroupFromConfig(name string) (configPath string, err error) {
 
 	return configPath, nil
 }
+
 // AddProviderToConfig adds a new proxy-provider and wires it into the first select-type
 // proxy group with a "use" field. If no suitable group exists, a new select group is created.
 func AddProviderToConfig(name, url string) (configPath string, err error) {
@@ -1596,27 +1595,25 @@ func MoveRuleToPosition(fromIdx, toIdx int) (configPath string, err error) {
 		return configPath, nil // no-op
 	}
 
-	// Remove the rule at fromIdx
-	rule := rulesList.Content[fromIdx]
-	rulesList.Content = append(rulesList.Content[:fromIdx], rulesList.Content[fromIdx+1:]...)
-
-	// Adjust toIdx after removal
-	adjustedTo := toIdx
-	if toIdx > fromIdx {
-		adjustedTo = toIdx - 1
-	}
-
-	// Insert at adjusted position
-	// grow slice then shift
-	rulesList.Content = append(rulesList.Content, nil)
-	copy(rulesList.Content[adjustedTo+1:], rulesList.Content[adjustedTo:])
-	rulesList.Content[adjustedTo] = rule
+	rulesList.Content = moveNodesToPosition(rulesList.Content, fromIdx, toIdx)
 
 	if err := writeConfig(doc, configPath); err != nil {
 		return "", err
 	}
 
 	return configPath, nil
+}
+
+func moveNodesToPosition(nodes []*yaml.Node, fromIdx, toIdx int) []*yaml.Node {
+	node := nodes[fromIdx]
+	nodes = append(nodes[:fromIdx], nodes[fromIdx+1:]...)
+	if toIdx == len(nodes) {
+		return append(nodes, node)
+	}
+	nodes = append(nodes, nil)
+	copy(nodes[toIdx+1:], nodes[toIdx:])
+	nodes[toIdx] = node
+	return nodes
 }
 
 // MoveRuleInConfig swaps the rules at two indices, effectively moving ruleIdx to targetIdx.
@@ -1705,5 +1702,3 @@ func UpdateRuleInConfig(index int, ruleType, payload, proxy string) (configPath 
 
 	return configPath, nil
 }
-
-

@@ -7,6 +7,11 @@ import (
 	"mihomoTui/internal/utils"
 )
 
+var (
+	appName    = "mihomoTui"
+	appVersion = "v0.0-Alpha"
+)
+
 func main() {
 	// Initialize application logging
 	shutdownLog := api.InitLogging()
@@ -14,8 +19,8 @@ func main() {
 
 	// Create new application with build info
 	app := app.NewApp(
-		utils.GetEnvWithDefault("APP_NAME", "mihomoTui"),
-		utils.GetEnvWithDefault("APP_VERSION", "v0.0-Alpha"),
+		utils.GetEnvWithDefault("APP_NAME", appName),
+		utils.GetEnvWithDefault("APP_VERSION", appVersion),
 	)
 
 	// Initialize the application

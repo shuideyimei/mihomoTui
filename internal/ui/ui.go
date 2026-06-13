@@ -19,6 +19,10 @@ type statusBar interface {
 type UiUpdater struct {
 	app     *tview.Application
 	statBar statusBar
+
+	queueMu   sync.Mutex
+	queueCond *sync.Cond
+	queue     []func()
 }
 
 func InitUpdater(app *tview.Application) {
@@ -26,7 +30,23 @@ func InitUpdater(app *tview.Application) {
 		Updater = &UiUpdater{
 			app: app,
 		}
+		Updater.queueCond = sync.NewCond(&Updater.queueMu)
+		go Updater.run()
 	})
+}
+
+func (u *UiUpdater) run() {
+	for {
+		u.queueMu.Lock()
+		for len(u.queue) == 0 {
+			u.queueCond.Wait()
+		}
+		fn := u.queue[0]
+		u.queue[0] = nil
+		u.queue = u.queue[1:]
+		u.queueMu.Unlock()
+		u.app.QueueUpdateDraw(fn)
+	}
 }
 
 func (u *UiUpdater) SetStatusBar(statusBar statusBar) {
@@ -54,11 +74,14 @@ func (u *UiUpdater) UpdateUi(fn func()) {
 // Safe to call from any goroutine. The function will run on
 // the UI goroutine and the screen will be redrawn afterwards.
 func (u *UiUpdater) PostUi(fn func()) {
-	go u.app.QueueUpdateDraw(fn)
+	u.queueMu.Lock()
+	u.queue = append(u.queue, fn)
+	u.queueMu.Unlock()
+	u.queueCond.Signal()
 }
 
 func (u *UiUpdater) SetFocus(focusable tview.Primitive) {
-	go u.app.QueueUpdateDraw(func() {
+	u.PostUi(func() {
 		u.app.SetFocus(focusable)
 	})
 }

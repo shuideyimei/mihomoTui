@@ -325,28 +325,28 @@ func (d *DashboardPage) buildStatusText(config *models.Config) string {
 		modeColor = "[white]"
 	}
 
-	fmt.Fprint(&contentBuilder, fmt.Sprintf(i18n.T("dash.mode_label"), modeColor, config.Mode))
+	fmt.Fprintf(&contentBuilder, i18n.T("dash.mode_label"), modeColor, config.Mode)
 
 	fmt.Fprint(&contentBuilder, i18n.T("dash.port_status"))
 	hasPort := false
 	if config.Port != 0 {
-		fmt.Fprint(&contentBuilder, fmt.Sprintf(i18n.T("dash.http_port"), config.Port))
+		fmt.Fprintf(&contentBuilder, i18n.T("dash.http_port"), config.Port)
 		hasPort = true
 	}
 	if config.SocksPort != 0 {
-		fmt.Fprint(&contentBuilder, fmt.Sprintf(i18n.T("dash.socks_port"), config.SocksPort))
+		fmt.Fprintf(&contentBuilder, i18n.T("dash.socks_port"), config.SocksPort)
 		hasPort = true
 	}
 	if config.MixedPort != 0 {
-		fmt.Fprint(&contentBuilder, fmt.Sprintf(i18n.T("dash.mixed_port"), config.MixedPort))
+		fmt.Fprintf(&contentBuilder, i18n.T("dash.mixed_port"), config.MixedPort)
 		hasPort = true
 	}
 	if config.RedirPort != 0 {
-		fmt.Fprint(&contentBuilder, fmt.Sprintf(i18n.T("dash.redir_port"), config.RedirPort))
+		fmt.Fprintf(&contentBuilder, i18n.T("dash.redir_port"), config.RedirPort)
 		hasPort = true
 	}
 	if config.TProxyPort != 0 {
-		fmt.Fprint(&contentBuilder, fmt.Sprintf(i18n.T("dash.tproxy_port"), config.TProxyPort))
+		fmt.Fprintf(&contentBuilder, i18n.T("dash.tproxy_port"), config.TProxyPort)
 		hasPort = true
 	}
 	if !hasPort {
@@ -380,7 +380,7 @@ func (d *DashboardPage) updateSystemInfo() {
 		memUsage = "-"
 	}
 	d.mutex.RUnlock()
-	fmt.Fprint(&content, fmt.Sprintf(i18n.T("dash.memory_usage"), memUsage))
+	fmt.Fprintf(&content, i18n.T("dash.memory_usage"), memUsage)
 
 	ui.Updater.PostUi(func() {
 		d.systemInfoBox.SetText(content.String())
@@ -437,7 +437,11 @@ func (d *DashboardPage) startStreamMemoryUsage() {
 				d.mutex.Lock()
 				d.memoryData = nil
 				d.mutex.Unlock()
-				time.Sleep(5 * time.Second)
+				select {
+				case <-d.ctx.Done():
+					return
+				case <-time.After(5 * time.Second):
+				}
 			}
 		}
 	}

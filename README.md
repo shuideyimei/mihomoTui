@@ -280,8 +280,9 @@ The status bar at the bottom will show the current proxy mode and real-time traf
 ### Mihomo Config
 
 The TUI can directly modify your running Mihomo config.yaml — it locates it by:
-1. Scanning `/proc` for running mihomo processes and their `-d` / `--directory` flags
-2. Falling back to common locations: `/etc/mihomo/config.yaml`, `~/.config/mihomo/config.yaml`
+1. Using `MIHOMO_CONFIG_PATH` when explicitly set
+2. Scanning `/proc` for running mihomo processes and their `-d` / `--directory` flags
+3. Falling back to common locations: `/etc/mihomo/config.yaml`, `~/.config/mihomo/config.yaml`
 
 Operations on the mihomo config (proxy groups, rules, providers) require **sudo** access to write to the config file, as it is typically owned by root.
 

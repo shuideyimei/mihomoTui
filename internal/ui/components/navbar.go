@@ -17,9 +17,9 @@ type NavItem struct {
 // NavBar is a single-row horizontal navigation bar at the top of the page.
 type NavBar struct {
 	*tview.Flex
-	items       []NavItem
-	buttons     []*tview.Button
-	onSelect    func(int, string)
+	items    []NavItem
+	buttons  []*tview.Button
+	onSelect func(int, string)
 
 	currentIndex int
 	navigator    *FocusNavigator

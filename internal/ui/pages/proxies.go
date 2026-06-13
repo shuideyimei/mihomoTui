@@ -1186,11 +1186,3 @@ func (p *ProxiesPage) focusNodesList() {
 	p.currentFocusIndex = 3
 	ui.Updater.SetFocus(p.nodesList)
 }
-
-// focusSwitchButtons focuses the switch buttons
-func (p *ProxiesPage) focusSwitchButtons() {
-	p.currentFocusIndex = 1
-	if len(p.focusableButtons) > 0 {
-		ui.Updater.SetFocus(p.focusableButtons[p.buttonNav.Index()])
-	}
-}

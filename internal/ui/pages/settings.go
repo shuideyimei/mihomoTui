@@ -20,8 +20,8 @@ type Settings struct {
 	restoreBtn *tview.Button
 	statusText *tview.TextView
 
-	langBtn     *tview.Button
-	langStatus  *tview.TextView
+	langBtn    *tview.Button
+	langStatus *tview.TextView
 }
 
 func newSettingsPage(cm *config.Manager, appName, appVersion string) *Settings {

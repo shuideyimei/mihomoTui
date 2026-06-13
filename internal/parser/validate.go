@@ -3,7 +3,6 @@ package parser
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"mihomoTui/internal/types"
 )
@@ -88,12 +87,4 @@ func extractProxyNames(text string) []string {
 		}
 	}
 	return names
-}
-
-// Timing info helpers
-func formatDuration(d time.Duration) string {
-	if d < time.Second {
-		return fmt.Sprintf("%dms", d.Milliseconds())
-	}
-	return fmt.Sprintf("%.1fs", d.Seconds())
 }

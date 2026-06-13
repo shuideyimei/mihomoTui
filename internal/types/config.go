@@ -3,21 +3,21 @@ package types
 // ConfigDocument is the canonical parsed representation of a mihomo/clash config.
 // It is designed for clean serialization to/from YAML and easy merging.
 type ConfigDocument struct {
-	Port            int                    `yaml:"port,omitempty"`
-	SocksPort       int                    `yaml:"socks-port,omitempty"`
-	MixedPort       int                    `yaml:"mixed-port,omitempty"`
-	RedirPort       int                    `yaml:"redir-port,omitempty"`
-	TProxyPort      int                    `yaml:"tproxy-port,omitempty"`
-	AllowLan        bool                   `yaml:"allow-lan,omitempty"`
-	BindAddress     string                 `yaml:"bind-address,omitempty"`
-	Mode            string                 `yaml:"mode,omitempty"`
-	LogLevel        string                 `yaml:"log-level,omitempty"`
-	ExternalUI      string                 `yaml:"external-ui,omitempty"`
-	Secret          string                 `yaml:"secret,omitempty"`
-	Interface       string                 `yaml:"interface-name,omitempty"`
-	RoutingMark     int                    `yaml:"routing-mark,omitempty"`
-	IPv6            bool                   `yaml:"ipv6,omitempty"`
-	TCPConcurrent   bool                   `yaml:"tcp-concurrent,omitempty"`
+	Port          int    `yaml:"port,omitempty"`
+	SocksPort     int    `yaml:"socks-port,omitempty"`
+	MixedPort     int    `yaml:"mixed-port,omitempty"`
+	RedirPort     int    `yaml:"redir-port,omitempty"`
+	TProxyPort    int    `yaml:"tproxy-port,omitempty"`
+	AllowLan      bool   `yaml:"allow-lan,omitempty"`
+	BindAddress   string `yaml:"bind-address,omitempty"`
+	Mode          string `yaml:"mode,omitempty"`
+	LogLevel      string `yaml:"log-level,omitempty"`
+	ExternalUI    string `yaml:"external-ui,omitempty"`
+	Secret        string `yaml:"secret,omitempty"`
+	Interface     string `yaml:"interface-name,omitempty"`
+	RoutingMark   int    `yaml:"routing-mark,omitempty"`
+	IPv6          bool   `yaml:"ipv6,omitempty"`
+	TCPConcurrent bool   `yaml:"tcp-concurrent,omitempty"`
 
 	Proxies        []map[string]interface{} `yaml:"proxies,omitempty,flow"`
 	ProxyGroups    []map[string]interface{} `yaml:"proxy-groups,omitempty,flow"`

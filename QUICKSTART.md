@@ -121,8 +121,9 @@ secret: ""                          # optional, recommended
 
 The TUI locates your Mihomo `config.yaml` by:
 
-1. Scanning `/proc` for running mihomo processes and their `-d` / `--directory` flags
-2. Falling back to common locations:
+1. Using `MIHOMO_CONFIG_PATH` when explicitly set
+2. Scanning `/proc` for running mihomo processes and their `-d` / `--directory` flags
+3. Falling back to common locations:
    - `/etc/mihomo/config.yaml`
    - `~/.config/mihomo/config.yaml`
 

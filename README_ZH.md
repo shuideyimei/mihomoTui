@@ -248,8 +248,9 @@ go run main.go
 ### Mihomo 配置
 
 TUI 可以直接修改运行中的 Mihomo config.yaml，它通过以下方式定位配置文件：
-1. 扫描 `/proc` 查找运行中的 mihomo 进程及其 `-d` / `--directory` 参数
-2. 回退到常见位置：`/etc/mihomo/config.yaml`、`~/.config/mihomo/config.yaml`
+1. 优先使用显式设置的 `MIHOMO_CONFIG_PATH`
+2. 扫描 `/proc` 查找运行中的 mihomo 进程及其 `-d` / `--directory` 参数
+3. 回退到常见位置：`/etc/mihomo/config.yaml`、`~/.config/mihomo/config.yaml`
 
 对 mihomo 配置的操作（代理组、规则、提供者）需要 **sudo** 权限才能写入配置文件（通常由 root 所有）。
 

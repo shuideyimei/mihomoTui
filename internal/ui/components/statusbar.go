@@ -82,7 +82,11 @@ func (s *StatusBar) startTrafficStream() {
 				ui.Updater.UpdateUi(func() {
 					s.updateTraffic(nil)
 				})
-				time.Sleep(5 * time.Second)
+				select {
+				case <-s.ctx.Done():
+					return
+				case <-time.After(5 * time.Second):
+				}
 			}
 		}
 	}

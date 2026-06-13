@@ -24,12 +24,12 @@ type ConfigPage struct {
 	form *tview.Form
 
 	// Direct field references (avoids label-based lookup)
-	apiAddrField  *tview.InputField
+	apiAddrField   *tview.InputField
 	apiSecretField *tview.InputField
-	httpPortField *tview.InputField
+	httpPortField  *tview.InputField
 	socksPortField *tview.InputField
 	mixedPortField *tview.InputField
-	statusField   *tview.TextView
+	statusField    *tview.TextView
 
 	// Current config values
 	currentConfig *config.AppConfig
@@ -237,10 +237,10 @@ func (c *ConfigPage) resetConfig() {
 
 	api.UpdateClient(c.currentConfig.API.BaseURL, c.currentConfig.API.Secret)
 	ui.Updater.PostUi(func() {
-			// Update API
-			c.updateConfigForm()
-			c.showStatus(i18n.T("cfg.reset_ok"))
-		})
+		// Update API
+		c.updateConfigForm()
+		c.showStatus(i18n.T("cfg.reset_ok"))
+	})
 }
 
 // testConnection tests the API connection using form values
@@ -257,13 +257,9 @@ func (c *ConfigPage) testConnection() {
 	testBtn.SetDisabled(true)
 	c.showStatus(i18n.T("cfg.testing"))
 
-	origURL := c.currentConfig.API.BaseURL
-	origSecret := c.currentConfig.API.Secret
-
 	go func() {
-		api.UpdateClient(url, secret)
-		defer api.UpdateClient(origURL, origSecret)
-		err := api.Client.HealthCheck()
+		testClient := api.NewClient(url, secret)
+		err := testClient.HealthCheck()
 
 		ui.Updater.PostUi(func() {
 			testBtn.SetDisabled(false)

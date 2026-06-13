@@ -4,11 +4,11 @@ package types
 type MergeMode string
 
 const (
-	MergeModeReplace MergeMode = "replace"  // overlay entirely replaces base
-	MergeModeAppend  MergeMode = "append"   // overlay items appended to base
-	MergeModeMerge   MergeMode = "merge"    // deep-merge by key (default for maps)
-	MergeModePrepend MergeMode = "prepend"  // overlay items prepended to base
-	MergeModeSkip    MergeMode = "skip"     // keep base, skip overlay
+	MergeModeReplace MergeMode = "replace" // overlay entirely replaces base
+	MergeModeAppend  MergeMode = "append"  // overlay items appended to base
+	MergeModeMerge   MergeMode = "merge"   // deep-merge by key (default for maps)
+	MergeModePrepend MergeMode = "prepend" // overlay items prepended to base
+	MergeModeSkip    MergeMode = "skip"    // keep base, skip overlay
 )
 
 // MergeStrategy defines per-field merge behavior.
@@ -43,17 +43,17 @@ func DefaultMergeStrategy() MergeStrategy {
 
 // MergeResult holds the outcome of a merge operation.
 type MergeResult struct {
-	Document   *ConfigDocument   `json:"document"`
-	Conflicts  []ConflictEntry   `json:"conflicts,omitempty"`
-	Strategy   MergeStrategy     `json:"strategy"`
-	Warning    []string          `json:"warnings,omitempty"`
+	Document  *ConfigDocument `json:"document"`
+	Conflicts []ConflictEntry `json:"conflicts,omitempty"`
+	Strategy  MergeStrategy   `json:"strategy"`
+	Warning   []string        `json:"warnings,omitempty"`
 }
 
 // MergePreview shows what would change without applying it.
 type MergePreview struct {
-	Added       []string        `json:"added"`
-	Removed     []string        `json:"removed"`
-	Modified    []string        `json:"modified"`
-	Conflicts   []ConflictEntry `json:"conflicts,omitempty"`
-	Strategy    MergeStrategy   `json:"strategy"`
+	Added     []string        `json:"added"`
+	Removed   []string        `json:"removed"`
+	Modified  []string        `json:"modified"`
+	Conflicts []ConflictEntry `json:"conflicts,omitempty"`
+	Strategy  MergeStrategy   `json:"strategy"`
 }

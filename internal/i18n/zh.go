@@ -15,6 +15,8 @@ var zhDict = map[string]string{
 	"nav.rules":         "规则",
 	"nav.ruleproviders": "规则提供者",
 	"nav.settings":      "设置",
+	"nav.profiles":      "配置文件",
+	"nav.editor":        "配置编辑",
 	"nav.configmgr":     "配置管理",
 
 	// ── StatusBar ──

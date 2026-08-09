@@ -216,12 +216,12 @@ func (c *ConfigPage) saveConfig() {
 
 	c.currentConfig = &newConfig
 
-	portConfig := &models.Config{
-		Port:      c.getPortFieldValue(c.httpPortField),
-		SocksPort: c.getPortFieldValue(c.socksPortField),
-		MixedPort: c.getPortFieldValue(c.mixedPortField),
+	portConfig := map[string]interface{}{
+		"port":       c.getPortFieldValue(c.httpPortField),
+		"socks-port": c.getPortFieldValue(c.socksPortField),
+		"mixed-port": c.getPortFieldValue(c.mixedPortField),
 	}
-	if err := api.Client.UpdateConfig(portConfig); err != nil {
+	if err := api.Client.PatchConfig(portConfig); err != nil {
 		c.showStatus(fmt.Sprintf(i18n.T("cfg.saved_port_fail"), err))
 		return
 	}

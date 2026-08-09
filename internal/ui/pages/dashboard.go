@@ -139,7 +139,8 @@ func (d *DashboardPage) createControlButtons() {
 
 	// Add to main control panel
 	d.controlButtons.AddItem(buttonsRow, 1, 0, true)
-	d.controlButtons.AddItem(d.statusText, 0, 1, false)
+	d.controlButtons.AddItem(d.statusText, 7, 0, false) // usually needs a few lines for ports
+	d.controlButtons.AddItem(nil, 0, 1, false)          // spacer takes remaining space
 
 	// Set up keyboard navigation for buttons
 	d.controlButtons.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -455,12 +456,13 @@ func (d *DashboardPage) toggleAllowLan() {
 	// Show operation in progress
 	d.showOperationStatus(i18n.T("dash.toggling_lan"))
 
-	// Create a new config with toggled Allow LAN setting
-	newConfig := *config // Copy existing config
-	newConfig.AllowLan = !config.AllowLan
+	// Create a patch with toggled Allow LAN setting
+	patch := map[string]interface{}{
+		"allow-lan": !config.AllowLan,
+	}
 
 	// Update the setting via API
-	err := api.Client.UpdateConfig(&newConfig)
+	err := api.Client.PatchConfig(patch)
 
 	if err != nil {
 		d.showOperationStatus(fmt.Sprintf(i18n.T("dash.lan_toggle_fail"), err))
@@ -469,11 +471,11 @@ func (d *DashboardPage) toggleAllowLan() {
 	}
 
 	status := i18n.T("dash.lan_off_label")
-	if newConfig.AllowLan {
+	if !config.AllowLan {
 		status = i18n.T("dash.lan_on_label")
 	}
 	d.showOperationStatus(fmt.Sprintf(i18n.T("dash.lan_toggled"), status))
-	log.Printf("Allow LAN toggled to: %v", newConfig.AllowLan)
+	log.Printf("Allow LAN toggled to: %v", !config.AllowLan)
 
 	// Refresh data to show updated status
 	go d.updateProxyStatusData()
@@ -493,26 +495,24 @@ func (d *DashboardPage) toggleTun() {
 	// Show operation in progress
 	d.showOperationStatus(i18n.T("dash.toggling_tun"))
 
-	// Create a new config with toggled TUN setting
-	newConfig := *config // Copy existing config
-
-	// Initialize Tun map if it's nil
-	if newConfig.Tun == nil {
-		newConfig.Tun = make(map[string]interface{})
-	}
-
 	// Get current TUN state
 	currentTunEnabled := false
-	if enable, ok := newConfig.Tun["enable"].(bool); ok {
-		currentTunEnabled = enable
+	if config.Tun != nil {
+		if enable, ok := config.Tun["enable"].(bool); ok {
+			currentTunEnabled = enable
+		}
 	}
 
 	// Toggle TUN state
 	newTunEnabled := !currentTunEnabled
-	newConfig.Tun["enable"] = newTunEnabled
+	patch := map[string]interface{}{
+		"tun": map[string]interface{}{
+			"enable": newTunEnabled,
+		},
+	}
 
 	// Update the setting via API
-	err := api.Client.UpdateConfig(&newConfig)
+	err := api.Client.PatchConfig(patch)
 
 	if err != nil {
 		d.showOperationStatus(fmt.Sprintf(i18n.T("dash.tun_toggle_fail"), err))

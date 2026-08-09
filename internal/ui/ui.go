@@ -54,6 +54,10 @@ func (u *UiUpdater) run() {
 	}
 }
 
+func (u *UiUpdater) GetApp() *tview.Application {
+	return u.app
+}
+
 func (u *UiUpdater) SetStatusBar(statusBar statusBar) {
 	u.statBar = statusBar
 }

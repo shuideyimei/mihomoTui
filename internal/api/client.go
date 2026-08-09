@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -100,12 +101,27 @@ func NewStreamClient(baseURL, secret string) *HttpClient {
 }
 
 func newHTTPClient(baseURL, secret string, timeout time.Duration) *HttpClient {
+	baseURL = strings.TrimRight(baseURL, "/")
+	client := &http.Client{
+		Timeout: timeout,
+	}
+
+	if strings.HasPrefix(baseURL, "unix://") {
+		socketPath := strings.TrimPrefix(baseURL, "unix://")
+		client.Transport = &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", socketPath)
+			},
+		}
+		// For the standard http.Client to parse the URL correctly, 
+		// we must trick it into thinking it's hitting a normal host.
+		baseURL = "http://localhost"
+	}
+
 	return &HttpClient{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		secret:  secret,
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		baseURL:    baseURL,
+		secret:     secret,
+		httpClient: client,
 	}
 }
 
@@ -115,14 +131,19 @@ func UpdateClient(baseURL, secret string) {
 		return
 	}
 
+	newC := newHTTPClient(baseURL, secret, 10*time.Second)
+	newStream := newHTTPClient(baseURL, secret, 0)
+
 	Client.mu.Lock()
-	Client.baseURL = strings.TrimRight(baseURL, "/")
-	Client.secret = secret
+	Client.baseURL = newC.baseURL
+	Client.secret = newC.secret
+	Client.httpClient = newC.httpClient
 	Client.mu.Unlock()
 
 	StreamClient.mu.Lock()
-	StreamClient.baseURL = strings.TrimRight(baseURL, "/")
-	StreamClient.secret = secret
+	StreamClient.baseURL = newStream.baseURL
+	StreamClient.secret = newStream.secret
+	StreamClient.httpClient = newStream.httpClient
 	StreamClient.mu.Unlock()
 
 	log.Printf("Updated API client: %s", baseURL)

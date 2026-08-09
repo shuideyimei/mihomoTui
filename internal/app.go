@@ -64,7 +64,9 @@ func NewApp(appName, appVersion string) *App {
 	pageInfo := ui.DefaultPageInfo()
 	pageNames := make([]string, len(pageInfo))
 	for index, item := range pageInfo {
-		pageNames[index] = item.ID
+		if !item.Separator {
+			pageNames[index] = item.ID
+		}
 	}
 	return &App{
 		app:            tview.NewApplication(),
@@ -201,43 +203,33 @@ func (a *App) setupPages() {
 	a.pages.AddPage("connections", connectionsPage, true, false)
 	a.pageLifecycle["connections"] = connectionsPage
 
-	// Config page
-	configPage := pages.NewConfig(a.configManager)
-	a.pages.AddPage("config", configPage, true, false)
-	a.pageLifecycle["config"] = configPage
-
 	// Logs page
 	logsPage := pages.NewLogs()
 	a.pages.AddPage("logs", logsPage, true, false)
 	a.pageLifecycle["logs"] = logsPage
+
+	// Profiles page (formerly configmgr)
+	configMgrPage := pages.NewConfigManager()
+	a.pages.AddPage("configmgr", configMgrPage, true, false)
+	a.pageLifecycle["configmgr"] = configMgrPage
 
 	// Subscriptions page
 	subPage := subscriptionspage.NewPage(a.subMgr)
 	a.pages.AddPage("subscriptions", subPage, true, false)
 	a.pageLifecycle["subscriptions"] = subPage
 
+	// Unified Editor Page (Proxy Groups, Rules, Providers)
 	proxyGroupsPage := pages.NewProxyGroups()
-	a.pages.AddPage("proxygroups", proxyGroupsPage, true, false)
-	a.pageLifecycle["proxygroups"] = proxyGroupsPage
-
-	// Rules page
 	rulesPage := pages.NewRules()
-	a.pages.AddPage("rules", rulesPage, true, false)
-	a.pageLifecycle["rules"] = rulesPage
-
-	// Rule providers page
 	rpPage := rproviders.NewPage()
-	a.pages.AddPage("ruleproviders", rpPage, true, false)
-	a.pageLifecycle["ruleproviders"] = rpPage
+	editorPage := pages.NewEditor(proxyGroupsPage, rulesPage, rpPage)
+	a.pages.AddPage("editor", editorPage, true, false)
+	a.pageLifecycle["editor"] = editorPage
 
-	// Settings page
-	settingsPage := pages.NewSettings(a.configManager, a.appName, a.appVersion)
-	settingsPage.SetInputCapture(settingsPage.GetInputCapture())
+	// Unified Settings page
+	settingsPage := pages.NewUnifiedSettings(a.configManager, a.appName, a.appVersion)
 	a.pages.AddPage("settings", settingsPage, true, false)
-
-	configMgrPage := pages.NewConfigManager()
-	a.pages.AddPage("configmgr", configMgrPage, true, false)
-	a.pageLifecycle["configmgr"] = configMgrPage
+	a.pageLifecycle["settings"] = settingsPage
 }
 
 // setupLayouts creates the application layout
@@ -252,9 +244,9 @@ func (a *App) setupLayouts() {
 
 	// Root layout (header + side navigation/content + status)
 	a.rootLayout = tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(a.header, 2, 0, false).
+		AddItem(a.header, 1, 0, false).
 		AddItem(a.bodyLayout, 0, 1, true).
-		AddItem(a.statusBar, 2, 0, false)
+		AddItem(a.statusBar, 1, 0, false)
 }
 
 // basicInitData initializes basic application data.
@@ -267,6 +259,10 @@ func (a *App) basicInitData() {
 // switchPage switches to a specific page
 func (a *App) switchPage(index int) {
 	if index >= 0 && index < len(a.pageNames) {
+		pageName := a.pageNames[index]
+		if pageName == "" {
+			return // Separator or empty
+		}
 		currentPageName := a.pageNames[a.currentPage]
 		if index != a.currentPage {
 			if guard, ok := a.pageLifecycle[currentPageName].(pages.NavigationGuard); ok {
@@ -276,7 +272,6 @@ func (a *App) switchPage(index int) {
 			}
 			// Switch to new page
 			a.currentPage = index
-			pageName := a.pageNames[index]
 			a.pages.SwitchToPage(pageName)
 			a.navBar.SelectItem(index)
 

@@ -6,25 +6,25 @@ import (
 )
 
 // Theme color constants (tcell.Color for component styling)
-// Minimalist palette: pure monochrome (no blue).
+// Modern palette with a mix of blues and grays for a polished look.
 var (
-	ThemeBorderColor = tcell.ColorGray
-	ThemeTitleColor  = tcell.ColorWhite    // Bright white for titles
-	ThemeHighlightBg = tcell.ColorGray     // Backward-compatible selection color
-	ThemeSelBgFocus  = tcell.ColorGray     // Backward-compatible focused selection
-	ThemeSelBgBlur   = tcell.ColorDarkGray // Backward-compatible blurred selection
-	ThemeHeaderBg    = tcell.ColorDarkGray // Header background
-	ThemeStatusBarBg = tcell.ColorDarkGray // Status bar background
-	ThemeFocusColor  = tcell.ColorYellow
-	ThemeActiveColor = tcell.ColorGreen
-	ThemeDangerColor = tcell.ColorRed
+	ThemeBorderColor = tcell.ColorDimGray
+	ThemeTitleColor  = tcell.ColorAqua     // Cyan for titles
+	ThemeHighlightBg = tcell.ColorSteelBlue
+	ThemeSelBgFocus  = tcell.ColorRoyalBlue
+	ThemeSelBgBlur   = tcell.ColorDarkSlateGray
+	ThemeHeaderBg    = tcell.ColorDarkSlateGray // Header background
+	ThemeStatusBarBg = tcell.ColorDarkSlateGray // Status bar background
+	ThemeFocusColor  = tcell.ColorGoldenrod
+	ThemeActiveColor = tcell.ColorMediumSpringGreen
+	ThemeDangerColor = tcell.ColorIndianRed
 
-	ThemeSelectionColor     = tcell.ColorGray
-	ThemeSelectionBlurColor = tcell.ColorDarkGray
-	// Component backgrounds — all gray tones
-	ThemeButtonBg      = tcell.ColorGray   // Normal button background
-	ThemeButtonFocusBg = tcell.ColorYellow // Focused/activated button background
-	ThemeInputBg       = tcell.ColorGray   // Input field background (editable area)
+	ThemeSelectionColor     = tcell.ColorRoyalBlue
+	ThemeSelectionBlurColor = tcell.ColorDarkSlateGray
+	// Component backgrounds
+	ThemeButtonBg      = tcell.ColorDarkSlateGray // Normal button background
+	ThemeButtonFocusBg = tcell.ColorGoldenrod     // Focused/activated button background
+	ThemeInputBg       = tcell.ColorDarkSlateGray // Input field background (editable area)
 
 	// ApplyThemeOnce guards the one-time application of global tview styles
 	applyThemeOnce bool

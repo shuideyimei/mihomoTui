@@ -14,6 +14,8 @@ var enDict = map[string]string{
 	"nav.rules":         "Rules",
 	"nav.ruleproviders": "Rule Providers",
 	"nav.settings":      "Settings",
+	"nav.profiles":      "Profiles",
+	"nav.editor":        "Editor",
 	"nav.configmgr":     "Config Manager",
 
 	// ── StatusBar ──

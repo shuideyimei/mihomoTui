@@ -7,16 +7,16 @@ import (
 )
 
 func TestNewSettings_NonNil(t *testing.T) {
-	s := NewSettings(config.NewManager(), "test", "1.0")
+	s := newSettingsPage(config.NewManager(), "test", "1.0")
 	if s == nil {
-		t.Fatal("NewSettings(config.NewManager(), \"test\", \"1.0\") returned nil")
+		t.Fatal("newSettingsPage(config.NewManager(), \"test\", \"1.0\") returned nil")
 	}
 }
 
 func TestSettings_BasicLayout(t *testing.T) {
-	s := NewSettings(config.NewManager(), "test", "1.0")
+	s := newSettingsPage(config.NewManager(), "test", "1.0")
 	if s == nil {
-		t.Fatal("NewSettings returned nil")
+		t.Fatal("newSettingsPage returned nil")
 	}
 
 	if s.Flex == nil {

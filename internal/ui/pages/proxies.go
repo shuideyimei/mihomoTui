@@ -556,7 +556,7 @@ func (p *ProxiesPage) updateNodesListContent() {
 	var selectedGroupProxy *models.Proxy
 	p.mutex.RLock()
 	for _, g := range p.proxyGroups {
-		if g != nil && g.Name == p.selectedGroup {
+		if g != nil && sameProxyName(g.Name, p.selectedGroup) {
 			selectedGroupProxy = g
 			break
 		}
@@ -838,9 +838,10 @@ func (p *ProxiesPage) switchMode(mode string) {
 			return
 		}
 
-		// Update mode
-		config.Mode = mode
-		err = api.Client.UpdateConfig(config)
+		patch := map[string]interface{}{
+			"mode": mode,
+		}
+		err = api.Client.PatchConfig(patch)
 		if err != nil {
 			p.showError(fmt.Sprintf(i18n.T("proxy.mode_switch_fail"), err))
 			return
@@ -848,6 +849,7 @@ func (p *ProxiesPage) switchMode(mode string) {
 
 		// Update local state
 		p.currentMode = mode
+		config.Mode = mode // Apply to local copy for UI update
 
 		// Update StatusBar with new config
 		ui.Updater.UpdateStatusBarConfig(config)
@@ -880,7 +882,7 @@ func (p *ProxiesPage) selectCurrentNode() {
 		// Update current selection in proxyGroups
 		p.mutex.Lock()
 		for _, g := range p.proxyGroups {
-			if g != nil && g.Name == p.selectedGroup {
+			if g != nil && sameProxyName(g.Name, p.selectedGroup) {
 				g.Now = p.selectedNode
 				break
 			}

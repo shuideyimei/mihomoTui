@@ -92,7 +92,7 @@ func (r *RulesPage) setupUI() {
 	r.setupEventHandlers()
 
 	content := tview.NewFlex().SetDirection(tview.FlexRow)
-	content.AddItem(r.searchInput, 3, 0, false)
+	content.AddItem(r.searchInput, 1, 0, false)
 	content.AddItem(r.table, 0, 1, true)
 	content.AddItem(r.actionBar, 1, 0, false)
 	content.AddItem(r.statusText, 1, 0, false)

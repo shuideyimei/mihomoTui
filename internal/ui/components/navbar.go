@@ -32,10 +32,34 @@ func NewNavBar(items []ui.PageInfo) *NavBar {
 	n.SetSelectedFunc(func(index int, _ string, _ string, _ rune) {
 		n.onItemSelected(index)
 	})
+	n.SetChangedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
+		if index >= 0 && index < len(n.items) && n.items[index].Separator {
+			// Find the next valid item depending on direction
+			// For simplicity, just find the next non-separator downward
+			next := index + 1
+			for next < len(n.items) && n.items[next].Separator {
+				next++
+			}
+			if next < len(n.items) {
+				n.SetCurrentItem(next)
+			} else {
+				// Try backward
+				prev := index - 1
+				for prev >= 0 && n.items[prev].Separator {
+					prev--
+				}
+				if prev >= 0 {
+					n.SetCurrentItem(prev)
+				}
+			}
+		}
+	})
 	n.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyRight, tcell.KeyEnter:
-			n.onItemSelected(n.GetCurrentItem())
+			if !n.items[n.GetCurrentItem()].Separator {
+				n.onItemSelected(n.GetCurrentItem())
+			}
 			return nil
 		}
 		return event
@@ -48,6 +72,10 @@ func (n *NavBar) rebuild() {
 	cursor := n.GetCurrentItem()
 	n.Clear()
 	for index, item := range n.items {
+		if item.Separator {
+			n.AddItem("[gray]────────────────[-]  ", "", 0, nil)
+			continue
+		}
 		marker := "  "
 		if index == n.currentIndex {
 			marker = "[green]●[-] "
@@ -59,7 +87,17 @@ func (n *NavBar) rebuild() {
 		n.AddItem(marker+item.Label(), secondary, 0, nil)
 	}
 	if cursor >= 0 && cursor < len(n.items) {
-		n.SetCurrentItem(cursor)
+		if n.items[cursor].Separator {
+			// Find next valid
+			for i := cursor; i < len(n.items); i++ {
+				if !n.items[i].Separator {
+					n.SetCurrentItem(i)
+					break
+				}
+			}
+		} else {
+			n.SetCurrentItem(cursor)
+		}
 	}
 }
 

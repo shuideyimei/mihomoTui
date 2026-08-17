@@ -128,7 +128,9 @@ func (u *UiUpdater) GetCurrentMode() string {
 
 func (u *UiUpdater) UpdateStatusBarConfig(config interface{}) {
 	if u.statBar != nil {
-		u.statBar.UpdateConfig(config)
+		u.PostUi(func() {
+			u.statBar.UpdateConfig(config)
+		})
 	}
 }
 

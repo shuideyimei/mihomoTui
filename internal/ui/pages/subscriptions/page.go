@@ -37,6 +37,11 @@ type Page struct {
 	showInput     bool
 	importForm    *tview.Form
 	mu            sync.Mutex
+
+	// ctx/cancel govern in-flight subscription downloads so they can be
+	// aborted when the user leaves the page.
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 func NewPage(subMgr *subscription.Manager) *Page {
@@ -172,10 +177,33 @@ func (p *Page) setupActionBar() {
 }
 
 func (p *Page) Activate() {
+	p.mu.Lock()
+	if p.cancel != nil {
+		p.cancel()
+	}
+	p.ctx, p.cancel = context.WithCancel(context.Background())
+	p.mu.Unlock()
 	go p.refresh()
 }
 
-func (p *Page) Deactivate() {}
+func (p *Page) Deactivate() {
+	p.mu.Lock()
+	if p.cancel != nil {
+		p.cancel()
+	}
+	p.mu.Unlock()
+}
+
+// downloadCtx returns the page's download context, or a fresh background
+// context if the page was never activated.
+func (p *Page) downloadCtx() context.Context {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.ctx != nil {
+		return p.ctx
+	}
+	return context.Background()
+}
 
 func (p *Page) showImportForm() {
 	p.mu.Lock()
@@ -229,7 +257,7 @@ func (p *Page) onCancelImport() {
 }
 
 func (p *Page) importFromURL(name, subURL string) {
-	doc, err := p.subMgr.ImportFromURL(context.Background(), subURL)
+	doc, err := p.subMgr.ImportFromURL(p.downloadCtx(), subURL)
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("sub.import_fail"), err))
 		return
@@ -310,7 +338,7 @@ func (p *Page) updateSelected() {
 
 	p.showStatus(fmt.Sprintf(i18n.T("sub.updating"), pv.Name))
 
-	doc, err := p.subMgr.ImportFromURL(context.Background(), pv.URL)
+	doc, err := p.subMgr.ImportFromURL(p.downloadCtx(), pv.URL)
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("sub.update_fail"), err))
 		return

@@ -20,7 +20,7 @@ func DefaultPageInfo() []PageInfo {
 		{Separator: true, LabelKey: "", Function: "", Alt: ""},
 		{ID: "configmgr", LabelKey: "nav.profiles", Function: "F5", Alt: "5"}, // Renamed locally
 		{ID: "subscriptions", LabelKey: "nav.subscriptions", Function: "F6", Alt: "6"},
-		{ID: "editor", LabelKey: "nav.editor", Function: "F7", Alt: "7"}, // Merged Groups, Rules, Providers
+		{ID: "editor", LabelKey: "nav.editor", Function: "F7", Alt: "7"},     // Merged Groups, Rules, Providers
 		{ID: "settings", LabelKey: "nav.settings", Function: "F8", Alt: "8"}, // Merged Config & Settings
 	}
 }

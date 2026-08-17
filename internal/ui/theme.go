@@ -9,7 +9,7 @@ import (
 // Modern palette with a mix of blues and grays for a polished look.
 var (
 	ThemeBorderColor = tcell.ColorDimGray
-	ThemeTitleColor  = tcell.ColorAqua     // Cyan for titles
+	ThemeTitleColor  = tcell.ColorAqua // Cyan for titles
 	ThemeHighlightBg = tcell.ColorSteelBlue
 	ThemeSelBgFocus  = tcell.ColorRoyalBlue
 	ThemeSelBgBlur   = tcell.ColorDarkSlateGray

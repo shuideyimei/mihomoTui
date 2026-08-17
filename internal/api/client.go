@@ -113,7 +113,7 @@ func newHTTPClient(baseURL, secret string, timeout time.Duration) *HttpClient {
 				return net.Dial("unix", socketPath)
 			},
 		}
-		// For the standard http.Client to parse the URL correctly, 
+		// For the standard http.Client to parse the URL correctly,
 		// we must trick it into thinking it's hitting a normal host.
 		baseURL = "http://localhost"
 	}
@@ -158,7 +158,9 @@ func drainAndClose(resp *http.Response) {
 
 // SetTimeout sets the HTTP client timeout
 func (c *HttpClient) SetTimeout(timeout time.Duration) {
+	c.mu.Lock()
 	c.httpClient.Timeout = timeout
+	c.mu.Unlock()
 }
 
 // makeRequest makes an HTTP request to the API.
@@ -173,6 +175,7 @@ func (c *HttpClient) makeRequestWithContext(ctx context.Context, method, endpoin
 	c.mu.RLock()
 	url := fmt.Sprintf("%s%s", c.baseURL, endpoint)
 	secret := c.secret
+	httpClient := c.httpClient
 	c.mu.RUnlock()
 
 	var reqBody io.Reader
@@ -195,7 +198,7 @@ func (c *HttpClient) makeRequestWithContext(ctx context.Context, method, endpoin
 		req.Header.Set("Authorization", "Bearer "+secret)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -505,6 +508,7 @@ func (c *HttpClient) ReloadConfig(path string) error {
 	c.mu.RLock()
 	url := fmt.Sprintf("%s%s", c.baseURL, "/configs")
 	secret := c.secret
+	httpClient := c.httpClient
 	c.mu.RUnlock()
 
 	body := map[string]string{"path": path}
@@ -522,7 +526,7 @@ func (c *HttpClient) ReloadConfig(path string) error {
 		req.Header.Set("Authorization", "Bearer "+secret)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -542,6 +546,7 @@ func (c *HttpClient) ReloadConfigData(data []byte) error {
 	c.mu.RLock()
 	url := fmt.Sprintf("%s%s", c.baseURL, "/configs")
 	secret := c.secret
+	httpClient := c.httpClient
 	c.mu.RUnlock()
 
 	req, err := http.NewRequest("PUT", url, bytes.NewReader(data))
@@ -553,7 +558,7 @@ func (c *HttpClient) ReloadConfigData(data []byte) error {
 		req.Header.Set("Authorization", "Bearer "+secret)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}

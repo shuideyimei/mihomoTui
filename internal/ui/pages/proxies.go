@@ -393,13 +393,7 @@ func (p *ProxiesPage) loadProvidersData() {
 	}
 	if proxies != nil {
 		p.proxiesData = proxies
-		groupCount := 0
-		for _, proxy := range proxies {
-			if proxy != nil && (len(proxy.All) > 0 || proxy.Now != "") {
-				groupCount++
-			}
-		}
-		log.Printf("Loaded %d proxies (%d groups)", len(proxies), groupCount)
+		log.Printf("Loaded %d proxies", len(proxies))
 	} else if xErr != nil {
 		log.Printf("Failed to get proxies: %v", xErr)
 	}
@@ -425,11 +419,9 @@ func (p *ProxiesPage) extractGroups() []*models.Proxy {
 				proxy.Name = name
 			}
 			groups = append(groups, proxy)
-			log.Printf("group %q: from API (type=%s all=%d now=%q)", name, proxy.Type, len(proxy.All), proxy.Now)
 		}
 	}
 
-	log.Printf("extractGroups result: %d groups", len(groups))
 	return groups
 }
 
@@ -550,8 +542,6 @@ func (p *ProxiesPage) updateNodesListContent() {
 		return
 	}
 
-	log.Printf("updateNodesListContent: selectedGroup=%q", p.selectedGroup)
-
 	// Find the selected group in proxyGroups
 	var selectedGroupProxy *models.Proxy
 	p.mutex.RLock()
@@ -564,12 +554,8 @@ func (p *ProxiesPage) updateNodesListContent() {
 	p.mutex.RUnlock()
 
 	if selectedGroupProxy == nil {
-		log.Printf("updateNodesListContent: group %q not found in proxyGroups", p.selectedGroup)
 		return
 	}
-
-	log.Printf("updateNodesListContent: group %q type=%s all=%v now=%q",
-		p.selectedGroup, selectedGroupProxy.Type, selectedGroupProxy.All, selectedGroupProxy.Now)
 
 	rowOffset, columnOffset := p.nodesList.GetOffset()
 	previousNode := p.selectedNode
@@ -599,11 +585,9 @@ func (p *ProxiesPage) updateNodesListContent() {
 
 	// Build node lookup from all providers
 	nodeLookup := p.buildNodeLookup()
-	log.Printf("updateNodesListContent: nodeLookup has %d entries", len(nodeLookup))
 
 	// If still no nodes, show empty state
 	if len(allNodes) == 0 {
-		log.Printf("updateNodesListContent: no nodes found for group %q, showing empty state", p.selectedGroup)
 		emptyCell := tview.NewTableCell(i18n.T("proxy.no_nodes")).SetTextColor(tcell.ColorGray).SetAlign(tview.AlignCenter)
 		p.nodesList.SetCell(1, 0, emptyCell)
 		p.nodesList.SetCell(1, 1, tview.NewTableCell("-").SetTextColor(tcell.ColorGray).SetAlign(tview.AlignCenter))

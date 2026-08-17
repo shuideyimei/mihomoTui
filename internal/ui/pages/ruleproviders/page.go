@@ -544,11 +544,15 @@ func (p *Page) hidePasteImport() {
 }
 
 func (p *Page) processPasteImportYAML() {
-	// Capture text BEFORE hiding the form — removing from UI tree may clear buffer
-	text := p.pasteTextArea.GetText()
+	// All UI reads must run on the UI goroutine
+	ui.Updater.PostUi(func() {
+		text := p.pasteTextArea.GetText()
+		p.hidePasteImport()
+		go p.doProcessPasteImportYAML(text)
+	})
+}
 
-	p.hidePasteImport()
-
+func (p *Page) doProcessPasteImportYAML(text string) {
 	if strings.TrimSpace(text) == "" {
 		p.showStatus(i18n.T("rp.paste_empty"))
 		return

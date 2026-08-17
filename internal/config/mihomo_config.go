@@ -1382,6 +1382,84 @@ func GetGroupDef(groupName string) (proxies []string, use []string, err error) {
 	return proxies, use, nil
 }
 
+// EnsureSafePathInConfig adds path to the mihomo config's safe-paths list and
+// persists the file atomically (serialized via configMu, like all other
+// config-file read-modify-write cycles). It returns the full safe-paths list
+// for runtime PATCHing, or nil when the path was already present and no change
+// was made.
+func EnsureSafePathInConfig(cfgPath, path string) ([]string, error) {
+	configMu.Lock()
+	defer configMu.Unlock()
+
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return nil, fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("解析配置文件失败: %w", err)
+	}
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 || doc.Content[0] == nil {
+		return nil, fmt.Errorf("配置文件为空或格式无效: %s", cfgPath)
+	}
+	mapping := doc.Content[0]
+	if mapping.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("配置文件格式无效: %s", cfgPath)
+	}
+
+	allPaths := []string{path}
+	alreadyPresent := false
+	var pathsNode *yaml.Node
+	for i := 0; i < len(mapping.Content)-1; i += 2 {
+		if mapping.Content[i].Value != "safe-paths" {
+			continue
+		}
+		pathsNode = mapping.Content[i+1]
+		for j := 0; j < len(pathsNode.Content); j++ {
+			v := pathsNode.Content[j].Value
+			if v == path {
+				alreadyPresent = true
+			}
+			if v != "" && v != path {
+				allPaths = append(allPaths, v)
+			}
+		}
+		break
+	}
+
+	if alreadyPresent {
+		return nil, nil
+	}
+
+	if pathsNode != nil {
+		pathsNode.Content = append(pathsNode.Content, &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: path,
+			Style: yaml.DoubleQuotedStyle,
+		})
+	} else {
+		mapping.Content = append(mapping.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: "safe-paths"},
+			&yaml.Node{
+				Kind: yaml.SequenceNode,
+				Content: []*yaml.Node{
+					{Kind: yaml.ScalarNode, Value: path, Style: yaml.DoubleQuotedStyle},
+				},
+			},
+		)
+	}
+
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return nil, fmt.Errorf("序列化配置文件失败: %w", err)
+	}
+	if err := WriteFileAtomic(cfgPath, out, 0644); err != nil {
+		return nil, fmt.Errorf("写入配置文件失败: %w", err)
+	}
+	return allPaths, nil
+}
+
 // GetRulesFromConfig returns all rules from the config file as strings
 func GetRulesFromConfig() ([]string, error) {
 	configPath := FindMihomoConfigPath()

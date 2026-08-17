@@ -181,9 +181,8 @@ func (p *LogsPage) onLevelChanged() {
 	}
 	wasPaused := p.isPaused
 	p.isPaused = false
-	p.mu.Unlock()
-
 	p.ctx, p.cancel = context.WithCancel(context.Background())
+	p.mu.Unlock()
 
 	if wasPaused {
 		p.mu.Lock()
@@ -199,19 +198,19 @@ func (p *LogsPage) togglePause() {
 	p.mu.Lock()
 	wasPaused := p.isPaused
 	p.isPaused = !p.isPaused
-	p.mu.Unlock()
-
 	if wasPaused {
+		// Resuming: cancel the old stream context and allocate a fresh one.
 		if p.cancel != nil {
 			p.cancel()
 		}
 		p.ctx, p.cancel = context.WithCancel(context.Background())
+	}
+	p.mu.Unlock()
+
+	if wasPaused {
 		p.pauseBtn.SetLabel(i18n.T("log.pause"))
 		p.startLogStream()
 	} else {
-		if p.cancel != nil {
-			p.cancel()
-		}
 		p.pauseBtn.SetLabel(i18n.T("log.resume"))
 	}
 }
@@ -358,9 +357,8 @@ func (p *LogsPage) Stop() {
 func (p *LogsPage) Activate() {
 	p.mu.Lock()
 	wasPaused := p.isPaused
-	p.mu.Unlock()
-
 	p.ctx, p.cancel = context.WithCancel(context.Background())
+	p.mu.Unlock()
 
 	p.addLog(i18n.T("log.stream_active"))
 

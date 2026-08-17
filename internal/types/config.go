@@ -22,8 +22,8 @@ type ConfigDocument struct {
 	Proxies        []map[string]interface{} `yaml:"proxies,omitempty,flow"`
 	ProxyGroups    []map[string]interface{} `yaml:"proxy-groups,omitempty,flow"`
 	Rules          []string                 `yaml:"rules,omitempty"`
-	RuleProviders  []map[string]interface{} `yaml:"rule-providers,omitempty,flow"`
-	ProxyProviders []map[string]interface{} `yaml:"proxy-providers,omitempty,flow"`
+	RuleProviders  map[string]interface{}   `yaml:"rule-providers,omitempty"`
+	ProxyProviders map[string]interface{}   `yaml:"proxy-providers,omitempty"`
 
 	DNS map[string]interface{} `yaml:"dns,omitempty"`
 	Tun map[string]interface{} `yaml:"tun,omitempty"`
@@ -44,8 +44,8 @@ func (c *ConfigDocument) Clone() *ConfigDocument {
 	cp := *c
 	cp.Proxies = cloneMaps(c.Proxies)
 	cp.ProxyGroups = cloneMaps(c.ProxyGroups)
-	cp.RuleProviders = cloneMaps(c.RuleProviders)
-	cp.ProxyProviders = cloneMaps(c.ProxyProviders)
+	cp.RuleProviders = cloneMapSS(c.RuleProviders)
+	cp.ProxyProviders = cloneMapSS(c.ProxyProviders)
 	cp.Extra = cloneMapSS(c.Extra)
 	cp.DNS = cloneMapSS(c.DNS)
 	cp.Tun = cloneMapSS(c.Tun)

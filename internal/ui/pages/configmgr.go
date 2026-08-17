@@ -468,8 +468,9 @@ func (cm *ConfigManager) deleteConfig(path, label string) {
 }
 
 // ensureSafePaths adds the user's config directory to Mihomo's SAFE_PATHS so that
-// path-based config reloads work without validation errors. It modifies the config
-// file (for persistence) and patches the running config via API (for immediate effect).
+// path-based config reloads work without validation errors. The config-file part
+// runs under configMu via config.EnsureSafePathInConfig; the running config is
+// then patched via API for immediate effect.
 func ensureSafePaths() {
 	cfgPath := config.FindCurrentConfigPath()
 	if cfgPath == "" {
@@ -482,85 +483,19 @@ func ensureSafePaths() {
 	}
 	cfgDir := filepath.Join(homeDir, ".config", "mihomo")
 
-	data, err := os.ReadFile(cfgPath)
+	paths, err := config.EnsureSafePathInConfig(cfgPath, cfgDir)
 	if err != nil {
-		log.Printf("[configmgr] ensureSafePaths: read failed: %v", err)
+		log.Printf("[configmgr] ensureSafePaths: %v", err)
 		return
 	}
-
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		log.Printf("[configmgr] ensureSafePaths: parse failed: %v", err)
-		return
-	}
-
-	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
-		return
-	}
-	mapping := doc.Content[0]
-	if mapping.Kind != yaml.MappingNode {
-		return
-	}
-
-	allPaths := []string{cfgDir}
-	alreadyPresent := false
-	var pathsNode *yaml.Node
-
-	for i := 0; i < len(mapping.Content)-1; i += 2 {
-		if mapping.Content[i].Value == "safe-paths" {
-			pathsNode = mapping.Content[i+1]
-			for j := 0; j < len(pathsNode.Content); j++ {
-				v := pathsNode.Content[j].Value
-				if v == cfgDir {
-					alreadyPresent = true
-				}
-				// Collect all existing paths for the PATCH call
-				if v != "" && v != cfgDir {
-					allPaths = append(allPaths, v)
-				}
-			}
-			break
-		}
-	}
-
-	if alreadyPresent {
-		return
-	}
-
-	if pathsNode != nil {
-		pathsNode.Content = append(pathsNode.Content, &yaml.Node{
-			Kind:  yaml.ScalarNode,
-			Value: cfgDir,
-			Style: yaml.DoubleQuotedStyle,
-		})
-	} else {
-		mapping.Content = append(mapping.Content,
-			&yaml.Node{Kind: yaml.ScalarNode, Value: "safe-paths"},
-			&yaml.Node{
-				Kind: yaml.SequenceNode,
-				Content: []*yaml.Node{
-					{Kind: yaml.ScalarNode, Value: cfgDir, Style: yaml.DoubleQuotedStyle},
-				},
-			},
-		)
-	}
-
-	out, err := yaml.Marshal(&doc)
-	if err != nil {
-		log.Printf("[configmgr] ensureSafePaths: marshal failed: %v", err)
-		return
-	}
-
-	// Use writeRawConfig which handles sudo cp for files owned by mihomo user
-	if err := writeRawConfig(cfgPath, string(out)); err != nil {
-		log.Printf("[configmgr] ensureSafePaths: write failed: %v", err)
-		return
+	if paths == nil {
+		return // already present
 	}
 
 	// Apply at runtime via PATCH /configs (send the complete list to avoid
 	// overwriting existing entries)
 	if err := api.Client.PatchConfig(map[string][]string{
-		"safe-paths": allPaths,
+		"safe-paths": paths,
 	}); err != nil {
 		log.Printf("[configmgr] ensureSafePaths: patch failed: %v", err)
 	}

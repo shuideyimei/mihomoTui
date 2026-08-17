@@ -16,24 +16,24 @@ import (
 type EditorPage struct {
 	*tview.Flex
 
-	pages       *tview.Pages
-	tabBar      *tview.TextView
-	
+	pages  *tview.Pages
+	tabBar *tview.TextView
+
 	// Sub-pages
 	proxyGroups *proxygroupspage.Page
 	rules       *RulesPage
 	providers   *rproviders.Page
 
-	tabs        []string
-	activeTab   int
+	tabs      []string
+	activeTab int
 }
 
 // NewEditorPage creates a new unified editor page.
 func NewEditorPage(proxyGroups *proxygroupspage.Page, rules *RulesPage, providers *rproviders.Page) *EditorPage {
 	e := &EditorPage{
-		Flex:        tview.NewFlex().SetDirection(tview.FlexRow),
-		pages:       tview.NewPages(),
-		tabBar:      tview.NewTextView().
+		Flex:  tview.NewFlex().SetDirection(tview.FlexRow),
+		pages: tview.NewPages(),
+		tabBar: tview.NewTextView().
 			SetDynamicColors(true).
 			SetRegions(true).
 			SetWrap(false).

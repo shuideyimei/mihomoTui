@@ -131,11 +131,14 @@ func (c *ConfigPage) setUpFormItems() {
 }
 
 // Activate activates the config page
+// Runs on the page-lifecycle goroutine; all widget mutations must be
+// marshalled onto the tview UI goroutine via PostUi.
 func (c *ConfigPage) Activate() {
-	c.setStatus(i18n.T("cfg.saving"))
-
-	// Load local config immediately
-	c.updateConfigForm()
+	ui.Updater.PostUi(func() {
+		c.setStatus(i18n.T("cfg.saving"))
+		// Load local config immediately
+		c.updateConfigForm()
+	})
 
 	// Fetch remote port config in background
 	go func() {

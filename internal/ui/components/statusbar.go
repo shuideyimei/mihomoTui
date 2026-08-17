@@ -8,6 +8,7 @@ import (
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
 	"mihomoTui/internal/utils"
+	"sync"
 	"time"
 
 	"github.com/rivo/tview"
@@ -16,6 +17,7 @@ import (
 // StatusBar represents the bottom status bar
 type StatusBar struct {
 	*tview.TextView
+	mu      sync.RWMutex
 	traffic *models.Traffic
 	config  *models.Config
 
@@ -94,18 +96,24 @@ func (s *StatusBar) startTrafficStream() {
 
 // updateTraffic updates traffic information
 func (s *StatusBar) updateTraffic(traffic *models.Traffic) {
+	s.mu.Lock()
 	s.traffic = traffic
 	s.updateContent()
+	s.mu.Unlock()
 }
 
 // updateConfig updates configuration information
 func (s *StatusBar) updateConfig(config *models.Config) {
+	s.mu.Lock()
 	s.config = config
 	s.updateContent()
+	s.mu.Unlock()
 }
 
 // GetCurrentMode returns the current proxy mode
 func (s *StatusBar) GetCurrentMode() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.config != nil {
 		return s.config.Mode
 	}

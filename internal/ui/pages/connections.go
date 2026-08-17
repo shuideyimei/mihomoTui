@@ -238,80 +238,43 @@ func (c *ConnectionsPage) updateConnectionsTable() {
 	connections := c.connections
 	c.mutex.RUnlock()
 
-	// Clear existing rows (except header)
 	rowCount := c.connectionsTable.GetRowCount()
-	for i := rowCount - 1; i > 0; i-- {
-		c.connectionsTable.RemoveRow(i)
+
+	// In-place update when the row count and per-row IDs match the new data.
+	// This avoids the O(n²) full rebuild on every 2-second refresh ticker.
+	inPlace := rowCount-1 == len(connections)
+	if inPlace {
+		for i := 0; i < len(connections); i++ {
+			cell := c.connectionsTable.GetCell(i+1, 0)
+			if cell == nil {
+				inPlace = false
+				break
+			}
+			ref, _ := cell.GetReference().(string)
+			if ref != connections[i].ID {
+				inPlace = false
+				break
+			}
+		}
 	}
 
-	// Add connection rows
-	for i, conn := range connections {
-		row := i + 1
-
-		// Truncate long IDs for display
-		idDisplay := conn.ID
-		if len(idDisplay) > 8 {
-			idDisplay = idDisplay[:8] + "..."
+	if !inPlace {
+		// Clear existing rows (except header)
+		for i := c.connectionsTable.GetRowCount() - 1; i > 0; i-- {
+			c.connectionsTable.RemoveRow(i)
 		}
+	}
 
-		// Format source address
-		sourceAddr := fmt.Sprintf("%s:%s", conn.Metadata.SourceIP, conn.Metadata.SourcePort)
+	// Fill rows (SetCell updates existing rows or appends new ones)
+	row := 1
+	for _, conn := range connections {
+		c.setConnectionRow(row, conn)
+		row++
+	}
 
-		// Format destination address
-		destAddr := fmt.Sprintf("%s:%s", conn.Metadata.DestinationIP, conn.Metadata.DestinationPort)
-		if conn.Metadata.Host != "" {
-			destAddr = fmt.Sprintf("%s:%s", conn.Metadata.Host, conn.Metadata.DestinationPort)
-		}
-
-		// Format proxy chains
-		chains := "DIRECT"
-		if len(conn.Chains) > 0 {
-			chains = strings.Join(conn.Chains, " → ")
-			chains = ui.StripFlagEmoji(chains)
-		}
-
-		// Format rule
-		rule := conn.Rule
-		if rule == "" {
-			rule = "DIRECT"
-		}
-
-		// Format upload/download
-		upload := utils.FormatBytes(conn.Upload)
-		download := utils.FormatBytes(conn.Download)
-
-		// Calculate duration
-		duration := time.Since(conn.Start).Truncate(time.Second).String()
-
-		// Set cell data
-		// Limit destAddr to 20 characters for display
-		if len(destAddr) > 20 {
-			destAddr = destAddr[:17] + "..."
-		}
-
-		cells := []struct {
-			text  string
-			color tcell.Color
-			align int
-		}{
-			{idDisplay, tcell.ColorWhite, tview.AlignLeft},
-			{conn.Metadata.Network, tcell.ColorWhite, tview.AlignCenter},
-			{sourceAddr, tcell.ColorGray, tview.AlignLeft},
-			{destAddr, tcell.ColorWhite, tview.AlignLeft},
-			{chains, tcell.ColorGray, tview.AlignLeft},
-			{rule, tcell.ColorGray, tview.AlignLeft},
-			{upload, tcell.ColorWhite, tview.AlignRight},
-			{download, tcell.ColorWhite, tview.AlignRight},
-			{duration, tcell.ColorGray, tview.AlignRight},
-		}
-
-		for j, cellData := range cells {
-			cell := tview.NewTableCell(cellData.text).
-				SetTextColor(cellData.color).
-				SetAlign(cellData.align)
-			cell.SetReference(conn.ID) // Store full ID in reference
-			c.connectionsTable.SetCell(row, j, cell)
-		}
+	// Trim surplus rows left over from a previous larger connection set
+	for i := c.connectionsTable.GetRowCount() - 1; i >= row; i-- {
+		c.connectionsTable.RemoveRow(i)
 	}
 
 	// Update status
@@ -323,6 +286,73 @@ func (c *ConnectionsPage) updateConnectionsTable() {
 		if row == 0 {
 			c.connectionsTable.Select(1, 0)
 		}
+	}
+}
+
+// setConnectionRow writes one connection into the given table row.
+func (c *ConnectionsPage) setConnectionRow(row int, conn models.Connection) {
+	// Truncate long IDs for display
+	idDisplay := conn.ID
+	if len(idDisplay) > 8 {
+		idDisplay = idDisplay[:8] + "..."
+	}
+
+	// Format source address
+	sourceAddr := fmt.Sprintf("%s:%s", conn.Metadata.SourceIP, conn.Metadata.SourcePort)
+
+	// Format destination address
+	destAddr := fmt.Sprintf("%s:%s", conn.Metadata.DestinationIP, conn.Metadata.DestinationPort)
+	if conn.Metadata.Host != "" {
+		destAddr = fmt.Sprintf("%s:%s", conn.Metadata.Host, conn.Metadata.DestinationPort)
+	}
+
+	// Format proxy chains
+	chains := "DIRECT"
+	if len(conn.Chains) > 0 {
+		chains = strings.Join(conn.Chains, " → ")
+		chains = ui.StripFlagEmoji(chains)
+	}
+
+	// Format rule
+	rule := conn.Rule
+	if rule == "" {
+		rule = "DIRECT"
+	}
+
+	// Format upload/download
+	upload := utils.FormatBytes(conn.Upload)
+	download := utils.FormatBytes(conn.Download)
+
+	// Calculate duration
+	duration := time.Since(conn.Start).Truncate(time.Second).String()
+
+	// Limit destAddr to 20 characters for display
+	if len(destAddr) > 20 {
+		destAddr = destAddr[:17] + "..."
+	}
+
+	cells := []struct {
+		text  string
+		color tcell.Color
+		align int
+	}{
+		{idDisplay, tcell.ColorWhite, tview.AlignLeft},
+		{conn.Metadata.Network, tcell.ColorWhite, tview.AlignCenter},
+		{sourceAddr, tcell.ColorGray, tview.AlignLeft},
+		{destAddr, tcell.ColorWhite, tview.AlignLeft},
+		{chains, tcell.ColorGray, tview.AlignLeft},
+		{rule, tcell.ColorGray, tview.AlignLeft},
+		{upload, tcell.ColorWhite, tview.AlignRight},
+		{download, tcell.ColorWhite, tview.AlignRight},
+		{duration, tcell.ColorGray, tview.AlignRight},
+	}
+
+	for j, cellData := range cells {
+		cell := tview.NewTableCell(cellData.text).
+			SetTextColor(cellData.color).
+			SetAlign(cellData.align)
+		cell.SetReference(conn.ID) // Store full ID in reference
+		c.connectionsTable.SetCell(row, j, cell)
 	}
 }
 

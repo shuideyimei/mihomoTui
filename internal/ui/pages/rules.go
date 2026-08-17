@@ -77,8 +77,12 @@ func (r *RulesPage) Activate() {
 
 func (r *RulesPage) Deactivate() {
 	log.Printf("Deactivating rules page")
-	r.table.Clear()
-	r.rules = nil
+	// Runs on the page-lifecycle goroutine; widget mutations must be
+	// marshalled onto the tview UI goroutine via PostUi.
+	ui.Updater.PostUi(func() {
+		r.table.Clear()
+		r.rules = nil
+	})
 }
 
 func (r *RulesPage) setupUI() {
@@ -748,13 +752,9 @@ func (r *RulesPage) refresh() {
 		r.showStatus(i18n.T("rule.loading"))
 	})
 	go func() {
-		// Ensure mihomo has the latest config from file before querying rules
-		if cp := config.FindMihomoConfigPath(); cp != "" {
-			if err := api.Client.ReloadConfig(cp); err != nil {
-				log.Printf("[rules] pre-refresh ReloadConfig failed: %v", err)
-			}
-		}
-
+		// Note: no ReloadConfig here — config writes (add/delete/move/import)
+		// already trigger their own hot reload, and a plain page refresh must
+		// not force mihomo to re-parse its config.
 		rulesData, err := api.Client.GetRules()
 		if err != nil {
 			// Only show error if no newer refresh is pending

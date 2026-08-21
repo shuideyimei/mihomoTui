@@ -1,22 +1,29 @@
-# Quick Start
+# Quick Start Guide
 
-## Prerequisites
+This guide will help you install, configure, and get started with **mihomoTui**.
 
-- **Go 1.24.1** or higher
-- A terminal with **256-color** and **mouse support** (GNOME Terminal, iTerm2, Windows Terminal, etc.)
-- A running [Mihomo](https://github.com/MetaCubeX/mihomo) instance with `external-controller` enabled
+---
 
-### Verify Your Terminal
+## 📋 Prerequisites
+
+1. **Go 1.24+** (for building from source)
+2. **A terminal with UTF-8, 256-color, and mouse support** (e.g. iTerm2, WezTerm, Alacritty, GNOME Terminal, Windows Terminal)
+3. A running **[Mihomo](https://github.com/MetaCubeX/mihomo)** core instance with `external-controller` enabled.
+
+### Check Terminal Environment
 
 ```bash
-# Check terminal color count (should be ≥ 256)
+# Verify color support (should output >= 256)
 echo $TERM
 tput colors
 
-# Mouse events are supported by most modern terminals by default
+# Ensure UTF-8 locale is set
+echo $LANG
 ```
 
-## Installation
+---
+
+## 📥 Installation & Running
 
 ### 1. Clone the Repository
 
@@ -25,191 +32,110 @@ git clone https://github.com/shuideyimei/mihomoTui.git
 cd mihomoTui
 ```
 
-### 2. Install Dependencies
+### 2. Download Dependencies & Run
 
 ```bash
 go mod tidy
+go run main.go
 ```
 
-### 3. Build and Run
+### 3. Build Executable Binary
 
 ```bash
-# Run directly (development mode)
-go run main.go
-
-# Or build a binary
+# Compile executable
 go build -o mihomoTui .
+
+# Run binary
 ./mihomoTui
 ```
 
-## First-Time Setup
+---
 
-### Step 1: Launch the Application
+## ⚡ First-Time Configuration
 
-```bash
-go run main.go
-```
+### Step 1: Launch and Configure API
 
-You should see an interface similar to this (navigation bar at top, page content in the middle, status bar at bottom):
+When launching mihomoTui for the first time:
+1. Press `F8` (or `Alt+8` / click **Settings** on the sidebar) to enter the Settings page.
+2. In the **API URL** input, enter your Mihomo external controller address (default: `http://127.0.0.1:9090` or a Unix socket path such as `unix:///tmp/mihomo.sock`).
+3. If Mihomo is configured with a secret, enter it into the **API Secret** field.
+4. Click **Save** (or press `Enter`). Settings are saved to `~/.config/mihomoTui/config.json`.
 
-```
-┌─ mihomoTui v0.0-Alpha ────────────────────────── Status: Connected ─┐
-│ [Dashboard] [Proxies] [Connections] [Config] [Logs] ...             │
-│ ┌──────────────────────────────────────────────────────────────────┐ │
-│ │                    Welcome to mihomoTui                          │ │
-│ │              Please configure API URL and Secret first           │ │
-│ └──────────────────────────────────────────────────────────────────┘ │
-│ Mode: Rule   ↑ 0B/s  ↓ 0B/s  Memory: 0MB  Connections: 0          │
-└──────────────────────────────────────────────────────────────────────┘
-```
+### Step 2: Verify Connection & Switch Modes
 
-### Step 2: Configure API Connection
+Once saved, the header bar will show a green `● Connected` indicator with the core version, and the bottom status bar will display real-time traffic statistics.
+- Press `F1` to view live throughput and memory usage on the **Dashboard**.
+- Press `F2` to enter **Proxies**, where you can press `T` to run batch HTTP latency tests or press `R` (Rule), `G` (Global), or `D` (Direct) to switch proxy modes instantly.
 
-1. Press `F4` or click **Config** on the navigation bar
-2. Enter your Mihomo API address (default: `http://127.0.0.1:9090`)
-3. Enter your API Secret (if configured in your Mihomo `config.yaml`)
-4. Click **Save** (or press `Enter`)
-5. Config is automatically written to `~/.config/mihomoTui/config.json`
-6. **Restart the application** for the settings to take effect
+---
 
-### Step 3: Verify Connection
+## 🗺️ Page Navigation & Shortcut Cheatsheet
 
-After restarting, the status bar at the bottom should display:
-- Current proxy mode (Rule / Global / Direct)
-- Real-time traffic (upload/download speed)
-- Memory usage
-- Active connection count
+| Shortcut | Destination / Feature | Description |
+|:---|:---|:---|
+| `F1` / `Alt+1` | **Dashboard** | View throughput, memory usage, active connections, and toggle TUN / Allow LAN |
+| `F2` / `Alt+2` | **Proxies** | Browse proxy groups and nodes, press `T` for latency speed tests, `/` to filter |
+| `F3` / `Alt+3` | **Connections** | Inspect live connections, press `D` to close one, `C` to close all, `Space` to pause |
+| `F4` / `Alt+4` | **Logs** | Stream real-time logs with level filters (Debug/Info/Warn/Error), `Space` to pause |
+| `F5` / `Alt+5` | **Profiles** | Discover and hot-switch active configuration profiles; in-TUI YAML text editor |
+| `F6` / `Alt+6` | **Subscriptions** | Import proxy subscriptions from remote URLs or local files with traffic stats |
+| `F7` / `Alt+7` | **Config Editor** | Unified configuration editor: press `Tab` between **Proxy Groups**, **Rules**, **Providers** |
+| `F8` / `Alt+8` | **Settings** | Configure API endpoints and switch UI language (zh/en) dynamically without restart |
+| `:` | **Command Palette** | Open quick fuzzy-search modal to jump to any page or feature |
+| `?` / `F12` | **Help Center** | Open interactive keyboard shortcut guide |
+| `Esc` | **Sidebar Navigation** | Exit input focus and return to the left navigation sidebar |
+| `Tab` / `Shift+Tab`| **Focus Cycling** | Cycle focus between form inputs, tables, and buttons |
 
-If the status bar shows "Disconnected", check:
-- Whether Mihomo is running
-- Whether the API URL and Secret are correct
-- Whether the port is accessible
+---
 
-## Configuration Details
+## ⚙️ Configuration Files
 
-### App Configuration
-
-Config file location: `~/.config/mihomoTui/config.json`
-
+### 1. mihomoTui App Configuration
+File location: `~/.config/mihomoTui/config.json`
 ```json
 {
   "api": {
     "base_url": "http://127.0.0.1:9090",
     "secret": ""
-  }
+  },
+  "language": "en"
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| `base_url` | Mihomo API address, format `http://ip:port` |
-| `secret` | API secret, must match the `secret` field in `config.yaml` |
+### 2. Mihomo Core Configuration Discovery
+mihomoTui discovers the running Mihomo `config.yaml` in the following precedence:
+1. `MIHOMO_CONFIG_PATH` environment variable if set.
+2. Parsing CLI arguments (`-d`, `-f`, `--config`) of the running Mihomo process.
+3. Standard fallback locations (`~/.config/mihomo/config.yaml`, `/etc/mihomo/config.yaml`, `~/.config/clash/config.yaml`).
 
-### Mihomo Configuration Requirements
+---
 
-Your Mihomo `config.yaml` must have `external-controller` enabled:
-
-```yaml
-# config.yaml example
-port: 7890
-socks-port: 7891
-external-controller: 0.0.0.0:9090  # required
-secret: ""                          # optional, recommended
-```
-
-### Finding the Mihomo Config File
-
-The TUI locates your Mihomo `config.yaml` by:
-
-1. Using `MIHOMO_CONFIG_PATH` when explicitly set
-2. Scanning `/proc` for running mihomo processes and their `-d` / `--directory` flags
-3. Falling back to common locations:
-   - `/etc/mihomo/config.yaml`
-   - `~/.config/mihomo/config.yaml`
-
-> ⚠️ Write operations on the Mihomo config (proxy groups, rules, providers) typically require `sudo` access, as the config file is usually owned by root.
-
-## Page Navigation
-
-| Key | Navigate To |
-|-----|-------------|
-| `F1` / `Ctrl+1` / `Alt+D` | Dashboard |
-| `F2` / `Ctrl+2` / `Alt+P` | Proxies |
-| `F3` / `Ctrl+3` / `Alt+R` | Connections |
-| `F4` / `Ctrl+4` / `Alt+C` | Config |
-| `F5` / `Ctrl+5` / `Alt+L` | Logs |
-| `F6` / `Ctrl+6` / `Alt+S` | Subscriptions |
-| `F7` / `Ctrl+7` / `Alt+G` | Proxy Groups |
-| `F8` / `Ctrl+8` / `Alt+U` | Rules |
-| `F9` / `Ctrl+9` / `Alt+T` | Rule Providers |
-| `F10` / `Ctrl+0` / `Alt+K` | Settings |
-| `F11` / `Alt+M` | Config Manager |
-| `?` | Show/hide keyboard shortcuts help |
-
-Mouse click on navigation bar items is also supported.
-
-## Building from Source
-
-### Build for Current Platform
-
-```bash
-go build -o mihomoTui .
-```
-
-### Cross-Compile
+## 🛠️ Cross-Compilation
 
 ```bash
 # Linux amd64
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o mihomoTui-linux-amd64 .
 
-# macOS ARM64 (Apple Silicon)
+# Linux arm64 (Raspberry Pi / Embedded)
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o mihomoTui-linux-arm64 .
+
+# macOS ARM64 (Apple Silicon M1/M2/M3/M4)
 GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o mihomoTui-darwin-arm64 .
 
-# macOS amd64 (Intel)
-GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o mihomoTui-darwin-amd64 .
-
-# Windows amd64
+# Windows 64-bit
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o mihomoTui-windows-amd64.exe .
 ```
 
-### Run Tests
+---
 
-```bash
-# Run all internal package tests
-go test ./internal/...
+## ❓ Troubleshooting
 
-# Run tests for a specific package
-go test ./internal/ui/pages/...
-go test ./internal/api/...
-```
+### 1. Header displays "Disconnected"
+- Check that the Mihomo core process is running: `curl http://127.0.0.1:9090/version`
+- Verify that the API URL and Secret configured in `F8 Settings` match the `external-controller` and `secret` in your Mihomo configuration.
 
-## Troubleshooting
-
-### No Display / Garbled Characters After Launch
-
-Make sure your terminal:
-- Supports UTF-8 encoding
-- Has `TERM=xterm-256color` or similar set
-- Uses a monospace font
-
-### Status Bar Shows "Disconnected"
-
-1. Verify Mihomo is running: `ps aux | grep mihomo`
-2. Check API accessibility: `curl http://127.0.0.1:9090/version`
-3. Verify the address and secret in the Config page
-
-### Cannot Save Configuration
-
-The config directory `~/.config/mihomoTui/` is created automatically. If saving fails, check:
-- Directory permissions
-- Disk space availability
-
-### Modifying Mihomo Config Requires sudo
-
-```bash
-# Run with elevated privileges temporarily
-sudo ./mihomoTui
-
-# Or change config file ownership (not recommended)
-sudo chown $USER /etc/mihomo/config.yaml
-```
+### 2. Permission Denied when modifying configuration
+- If your system Mihomo runs as root (e.g. `/etc/mihomo/config.yaml`), run with `sudo ./mihomoTui` or grant write access:
+  ```bash
+  sudo chown $USER ~/.config/mihomo/config.yaml
+  ```

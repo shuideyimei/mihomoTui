@@ -1,333 +1,277 @@
-# mihomoTui - TUI for Mihomo
-
-> Provide a desktop client experience in the terminal — a modern terminal UI for managing the [Mihomo](https://github.com/MetaCubeX/mihomo) proxy.
-
-[![Go Version](https://img.shields.io/badge/Go-1.24.1-00ADD8)](https://go.dev)
-
-English | [简体中文](README_ZH.md)
-
----
-
-## Screenshots
+# mihomoTui - Modern Terminal UI for Mihomo
 
 <p align="center">
-  <img src="picture/截屏2026-05-26%2014.50.55.png" alt="Dashboard">
+  <img src="static/image.png" alt="mihomoTui Dashboard" width="900">
 </p>
 
 <p align="center">
-  <img src="picture/截屏2026-05-26%2014.51.07.png" alt="Proxies">
+  <strong>Provide a desktop-client-grade experience directly in the terminal — a modern, responsive TUI for managing the <a href="https://github.com/MetaCubeX/mihomo">Mihomo</a> (Clash.Meta) proxy core, built with Go 1.24 and tview.</strong>
 </p>
 
 <p align="center">
-  <img src="picture/截屏2026-05-26%2015.02.30.png" alt="Connections">
-</p>
-
-<p align="center">
-  <img src="picture/截屏2026-05-26%2015.02.45.png" alt="Rules">
-</p>
-
-<p align="center">
-  <img src="picture/截屏2026-05-26%2015.03.12.png" alt="Logs">
-</p>
-
-<p align="center">
-  <img src="picture/截屏2026-05-26%2015.03.26.png" alt="Subscriptions">
-</p>
-
-<p align="center">
-  <img src="picture/截屏2026-05-26%2015.03.42.png" alt="Proxy Groups">
+  <a href="https://go.dev"><img src="https://img.shields.io/badge/Go-1.24-00ADD8?style=flat-square&logo=go" alt="Go Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="License"></a>
+  <a href="https://github.com/MetaCubeX/mihomo"><img src="https://img.shields.io/badge/Mihomo-Meta-blue?style=flat-square" alt="Mihomo Meta"></a>
+  <a href="#screenshots"><img src="https://img.shields.io/badge/UI-tview%20%2B%20tcell-orange?style=flat-square" alt="TUI"></a>
+  <a href="README_ZH.md"><img src="https://img.shields.io/badge/Language-简体中文-lightgrey?style=flat-square" alt="Simplified Chinese README"></a>
 </p>
 
 ---
 
-## Features
+## 🌟 Key Features
 
-- 🖥️ **Modern Terminal UI** — Beautiful interface built with [tview](https://github.com/rivo/tview)
-- 🌐 **Proxy Management** — Browse and switch proxy nodes and proxy groups in real time
-- ⚙️ **Configuration Control** — Toggle TUN mode, Allow LAN, and proxy mode on the fly
-- 📊 **Real-time Monitoring** — Live traffic statistics (upload/download speed), memory usage, and active connection count
-- 📋 **Rule Management** — View, add, edit, delete, reorder, and batch-import proxy rules and RULE-SET rules
-- 🔖 **Rule Providers** — Add, update, and delete rule-provider subscriptions (HTTP/local)
-- 📥 **Subscription Management** — Import proxy subscriptions from URL or local file, merge into your existing config
-- 📦 **Proxy Group Management** — Create, update, and delete custom proxy groups with types: `select`, `url-test`, `fallback`, `load-balance`
-- 📝 **Real-time Logs** — Live log streaming with level filtering and pause/resume
-- 🔗 **Connection Monitoring** — View active connections, close individual or all connections, auto-refresh
-- 🖱️ **Full Mouse Support** — Click to navigate, switch tabs, toggle buttons
-- ⌨️ **Keyboard Shortcuts** — F-keys, Ctrl+number, Alt+letter for quick navigation
-- 📎 **Smart Config Merging** — Merge subscription configs with your local config (proxies, groups, rules) with conflict resolution
+- 🖥️ **Modern Desktop-Grade TUI** — Built on [tview](https://github.com/rivo/tview) with responsive flex layouts, smooth focus management, full mouse interactions, and rich 256-color / TrueColor support.
+- 🌐 **Proxy & Node Management** — Real-time display of proxy providers, proxy groups, and individual nodes with batch HTTP ping latency benchmarking, instant proxy selection, and live fuzzy filtering (`/`).
+- ⚡ **Core Mode & Status Control** — One-key instant toggling of `Rule`, `Global`, and `Direct` proxy modes, with TUN mode and Allow LAN sharing controls and live status bar updates.
+- 📊 **Real-time Monitoring & Dashboard** — Live traffic metrics (upload/download speed meters), memory usage monitoring (Inuse / OS Limit), active connection counter, and core health indicator.
+- 🔗 **Active Connections Inspector** — View all active TCP and UDP connections with full metadata (source/destination IP, ports, matched rule chains, transferred traffic, duration), keyword search filtering, single-connection termination, and batch close-all.
+- 📝 **Live Streamed Logs** — Capture live Mihomo system logs via Server-Sent Events (SSE), with real-time level filtering (`debug`, `info`, `warning`, `error`), scroll tracking, and pause/resume capabilities.
+- 🗂️ **Profile Management (Profiles)** — Multi-profile discovery across common system paths, hot-switching active profiles on the fly with automatic core reloading, and an in-TUI text editor for direct YAML edits with unsaved-change protection.
+- 📥 **Universal Subscription Management** — Import proxy subscriptions from remote URLs or local files with built-in format auto-detection for **Clash/Mihomo YAML**, **Surge**, **Base64**, **V2Ray (vmess)**, **Shadowsocks (ss)**, **Trojan**, **Hysteria2 (hy2)**, and plain-text proxy lists, complete with UserInfo bandwidth/expiration extraction.
+- 🛠️ **Unified Configuration Editor (Editor)** — Seamlessly switch across three core submodules via `Tab` / `Shift+Tab`:
+  - **Proxy Groups**: Visual CRUD management for `select`, `url-test`, `fallback`, and `load-balance` groups with regex node filtering and custom health check URLs/intervals.
+  - **Routing Rules**: View, add (DOMAIN, DOMAIN-SUFFIX, IP-CIDR, GEOIP, GEOSITE, RULE-SET, MATCH, etc.), edit, delete, reorder (`Alt+↑`/`Alt+↓`/`M` move-to), and batch paste-import rules.
+  - **Rule Providers**: Manage behavioral rule-sets (`domain`, `ipcidr`, `classical`) from HTTP or local paths with automatic update intervals and batch import presets.
+- ⚙️ **Unified System & API Settings** — Configure external-controller API endpoints and secrets with dynamic **i18n** language switching (`zh` / `en`) that updates the entire UI without requiring a restart.
+- 🚀 **Command Palette** — Press `:` on any page to open a Sublime/VSCode-like fuzzy search modal for instant page jumping and command access.
+- ❓ **Interactive Help Center** — Press `?` or `F12` anywhere to display a full-screen hotkey cheatsheet overlay.
+- 🛡️ **Atomic & Safe File Persistence** — All configuration modifications use atomic file operations preserving Unix UID/GID permissions, backed by anti-SSRF protections.
 
-> 👉 [**QUICKSTART.md**](QUICKSTART.md) — Installation, configuration, and first-run guide
+---
 
-## Project Status
+## 📸 Screenshots
 
-**Current Version**: `v0.0-Alpha` — In Development
+<table align="center">
+  <tr>
+    <td align="center" width="50%">
+      <strong>1. Dashboard (F1)</strong><br>
+      <img src="picture/01-dashboard.png" alt="Dashboard" width="100%">
+    </td>
+    <td align="center" width="50%">
+      <strong>2. Proxies & Latency Test (F2)</strong><br>
+      <img src="picture/02-proxies.png" alt="Proxies" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>3. Connections Inspector (F3)</strong><br>
+      <img src="picture/03-connections.png" alt="Connections" width="100%">
+    </td>
+    <td align="center" width="50%">
+      <strong>4. Real-time Logs (F4)</strong><br>
+      <img src="picture/04-logs.png" alt="Logs" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>5. Profile Management (F5)</strong><br>
+      <img src="picture/05-profiles.png" alt="Profiles" width="100%">
+    </td>
+    <td align="center" width="50%">
+      <strong>6. Subscription Import (F6)</strong><br>
+      <img src="picture/06-subscriptions.png" alt="Subscriptions" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>7. Proxy Groups Editor (F7)</strong><br>
+      <img src="picture/07-editor-groups.png" alt="Proxy Groups" width="100%">
+    </td>
+    <td align="center" width="50%">
+      <strong>8. Routing Rules Editor (F7)</strong><br>
+      <img src="picture/08-editor-rules.png" alt="Rules" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>9. Rule Providers Editor (F7)</strong><br>
+      <img src="picture/09-editor-providers.png" alt="Rule Providers" width="100%">
+    </td>
+    <td align="center" width="50%">
+      <strong>10. Settings & Language (F8)</strong><br>
+      <img src="picture/10-settings.png" alt="Settings" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>11. Command Palette (:)</strong><br>
+      <img src="picture/11-palette.png" alt="Command Palette" width="100%">
+    </td>
+    <td align="center" width="50%">
+      <strong>12. Help & Keybindings (? / F12)</strong><br>
+      <img src="picture/12-help.png" alt="Help" width="100%">
+    </td>
+  </tr>
+</table>
 
-### Development Progress
+---
 
-- [x] API client development
-- [x] UI framework setup and layout
-- [x] Core functionality implementation
-- [x] Proxy management (view & switch)
-- [x] Real-time traffic monitoring
-- [x] Real-time log streaming
-- [x] Connection monitoring
-- [x] Dashboard with mode/config controls
-- [x] App configuration (API URL & Secret)
-- [x] Rule management (view, add, edit, delete, batch import)
-- [x] Rule providers management
-- [x] Subscription import & config merging
-- [x] Proxy group management (CRUD)
-- [ ] Check config details
-- [ ] Switch config files
-- [ ] Modify ports from UI
-- [ ] Multi-language support (i18n)
+## ⌨️ Keyboard Shortcuts
 
-## Tech Stack
+### Global Navigation Shortcuts
 
-| Layer      | Technology                                      |
-|------------|-------------------------------------------------|
-| Language   | Go 1.24.1                                       |
-| UI Toolkit | [tview](https://github.com/rivo/tview)          |
-| Terminal   | [tcell](https://github.com/gdamore/tcell/v2)    |
-| Config     | JSON (app) + YAML (mihomo)                      |
-| API        | Mihomo REST API (HTTP)                          |
-| Streaming  | Mihomo SSE/chunked endpoints (traffic, logs, memory) |
+| Shortcut | Destination | Description |
+|:---|:---|:---|
+| `F1` / `Alt+1` / `Ctrl+1` | **Dashboard** | View traffic, memory usage, proxy mode, and core status |
+| `F2` / `Alt+2` / `Ctrl+2` | **Proxies** | Select proxy nodes and perform batch latency testing |
+| `F3` / `Alt+3` / `Ctrl+3` | **Connections** | Monitor active connections and terminate individual/all connections |
+| `F4` / `Alt+4` / `Ctrl+4` | **Logs** | Real-time log stream display with level filters |
+| `F5` / `Alt+5` / `Ctrl+5` | **Profiles** | Switch active config profiles or edit YAML in-place |
+| `F6` / `Alt+6` / `Ctrl+6` | **Subscriptions** | Import subscriptions from remote URLs or local files |
+| `F7` / `Alt+7` / `Ctrl+7` | **Config Editor** | Unified editor for Proxy Groups, Rules, and Rule Providers |
+| `F8` / `Alt+8` / `Ctrl+8` | **Settings** | Configure API endpoints and switch UI language (zh/en) |
+| `:` | **Command Palette** | Open quick fuzzy-search page navigation modal |
+| `?` / `F12` | **Help Center** | Open/close interactive shortcut cheatsheet |
+| `Esc` | **Focus Navigation** | Return focus from inputs to the navigation sidebar |
+| `Tab` / `Shift+Tab` | **Cycle Focus / Subtabs** | Cycle between UI widgets, or switch subtabs in Editor |
+| `Ctrl+C` / `Ctrl+Q` | **Quit** | Gracefully exit application |
 
-## Project Structure
+### Page-Specific Shortcuts
 
-```
-mihomoTui/
-├── main.go                          # Program entry point
-├── go.mod / go.sum                  # Go module definition
-├── LICENSE                          # MIT License
-├── .gitignore
-├── static/
-│   └── image.png                    # Demo screenshot
-│
-├── internal/
-│   ├── app.go                       # Application orchestration, page wiring, layout
-│   ├── hotkey.go                    # Global keyboard shortcuts (F-keys, Ctrl, Alt)
-│   │
-│   ├── api/
-│   │   ├── client.go                # HTTP API client for all Mihomo endpoints
-│   │   └── stream.go                # SSE streaming client (traffic, logs, memory)
-│   │
-│   ├── cache/
-│   │   ├── cache.go                 # In-memory TTL cache (thread-safe)
-│   │   └── cache_test.go
-│   │
-│   ├── config/
-│   │   ├── config.go                # App config manager (JSON-based, save/load/backup)
-│   │   └── mihomo_config.go         # Mihomo YAML config CRUD (groups, rules, providers)
-│   │
-│   ├── event/
-│   │   ├── bus.go                   # Pub/sub event bus
-│   │   └── bus_test.go
-│   │
-│   ├── merge/
-│   │   ├── engine.go                # Smart config merging engine
-│   │   └── engine_test.go
-│   │
-│   ├── models/
-│   │   └── clash.go                 # Data models: Config, Proxy, Connection, Rule, etc.
-│   │
-│   ├── parser/
-│   │   ├── parser.go                # YAML config parser (Clash/Mihomo format)
-│   │   ├── parser_test.go
-│   │   ├── util.go                  # Parsing utilities
-│   │   └── validate.go              # Validation helpers
-│   │
-│   ├── proxygroup/
-│   │   ├── manager.go               # Proxy group & dependency management
-│   │   └── manager_test.go
-│   │
-│   ├── subscription/
-│   │   └── manager.go               # Subscription import from URL or local file
-│   │
-│   ├── types/
-│   │   ├── config.go                # ConfigDocument — canonical parsed config
-│   │   ├── event.go                 # Event types (subscription, config, proxy, cache)
-│   │   ├── merge.go                 # Merge strategy & result types
-│   │   ├── misc.go                  # UpdateTask, CacheEntry, ReloadEvent
-│   │   ├── proxygroup.go            # ProxyGroupDef, ImportResult, ConflictEntry
-│   │   └── subscription.go          # Subscription & UserInfo
-│   │
-│   ├── ui/
-│   │   ├── ui.go                    # UI updater singleton (QueueUpdate wrapper)
-│   │   ├── theme.go                 # Theme colors and global style initialization
-│   │   │
-│   │   ├── components/
-│   │   │   ├── header.go            # Top header bar (app name, version, connection status)
-│   │   │   ├── navbar.go            # Horizontal navigation bar (11 pages)
-│   │   │   ├── statusbar.go         # Bottom status bar (mode, traffic, help text)
-│   │   │   └── navigation.go        # Focus navigation primitives
-│   │   │
-│   │   └── pages/
-│   │       ├── pages.go             # Page constructors & ActivatablePage interface
-│   │       ├── dashboard.go         # Dashboard: connections, system info, TUN/AllowLAN controls
-│   │       ├── proxies.go           # Proxies page: provider list → group → node table + delay test
-│   │       ├── connections.go       # Connections page: live connection table, close/search
-│   │       ├── config.go            # Config page: API URL & Secret form
-│   │       ├── logs.go              # Logs page: real-time streaming with pause/resume
-│   │       ├── rules.go             # Rules page: view/add/edit/delete/batch-import rules
-│   │       ├── settings.go          # Settings page (WIP)
-│   │       ├── proxygroups/         # Proxy groups management: CRUD, type selection
-│   │       ├── ruleproviders/       # Rule providers management: add/update/delete
-│   │       └── subscriptions/       # Subscription management: import, merge preview
-│   │
-│   └── utils/
-│       ├── convert.go               # FormatBytes — human-readable byte formatting
-│       └── env.go                   # Environment variable helper
-```
+<details>
+<summary><strong>🔹 Rules Page Shortcuts</strong></summary>
 
-## Pages Overview
+- `A`: Open dialog to add a new rule
+- `D`: Delete currently selected rule (with confirmation modal)
+- `M`: Move selected rule to a specific position/line number
+- `P`: Paste and bulk-import multiline rule text
+- `Alt+↑` / `Alt+↓`: Shift selected rule up / down by one line
+- `/`: Focus search filter box
+- `R`: Reload rules from the core
+</details>
 
-| # | Page             | Description |
-|---|------------------|-------------|
-| 1 | **Dashboard**    | Connection stats, system memory, proxy mode, TUN/AllowLAN toggle buttons |
-| 2 | **Proxies**      | Provider list → group list → node table with delay testing |
-| 3 | **Connections**  | Live connection table with search, close individual/all |
-| 4 | **Config**       | Mihomo API base URL and Secret configuration |
-| 5 | **Logs**         | Real-time log streaming with pause/resume and level filtering |
-| 6 | **Subscriptions**| Import proxy subscriptions from URL or file, merge into config |
-| 7 | **Proxy Groups** | Create, update, delete custom proxy groups |
-| 8 | **Rules**        | View, add, edit, delete, reorder (↑/↓/move-to), bulk-import proxy rules |
-| 9 | **Rule Providers** | Add, update, delete rule-provider subscriptions |
+<details>
+<summary><strong>🔹 Proxies Page Shortcuts</strong></summary>
 
-## Keyboard Shortcuts
+- `T`: Trigger HTTP ping latency speed test on active group or node
+- `R`: Switch proxy mode to Rule
+- `G`: Switch proxy mode to Global
+- `D`: Switch proxy mode to Direct
+- `/`: Focus proxy node search filter
+</details>
 
-| Key              | Action                     |
-|------------------|----------------------------|
-| `F1` / `Ctrl+1` / `Alt+D` | Dashboard      |
-| `F2` / `Ctrl+2` / `Alt+P` | Proxies        |
-| `F3` / `Ctrl+3` / `Alt+R` | Connections    |
-| `F4` / `Ctrl+4` / `Alt+C` | Config         |
-| `F5` / `Ctrl+5` / `Alt+L` | Logs           |
-| `F6` / `Ctrl+6` / `Alt+S` | Subscriptions  |
-| `F7` / `Ctrl+7` / `Alt+G` | Proxy Groups   |
-| `F8` / `Ctrl+8` / `Alt+U` | Rules          |
-| `F9` / `Ctrl+9` / `Alt+T` | Rule Providers |
-| `F10` / `Ctrl+0` / `Alt+K`| Settings       |
-| `F11` / `Alt+M`           | Config Manager |
-| `Ctrl+C` / `Ctrl+Q`       | Quit application |
-| `Esc`            | Return focus to navigation bar |
-| `Tab` / `Shift+Tab` | Cycle focus between controls |
-| `Ctrl+R`        | Refresh current page data  |
-| `?`             | Show/hide keyboard shortcuts help |
+<details>
+<summary><strong>🔹 Connections Page Shortcuts</strong></summary>
 
-### Rules Page Shortcuts
+- `D`: Close the selected connection
+- `C` / `Shift+D`: Close all active connections
+- `/`: Search connection by host, destination IP, or rule name
+- `Space`: Pause / resume live connection auto-refresh
+</details>
 
-| Key              | Action                     |
-|------------------|----------------------------|
-| `A`             | Add rule                   |
-| `D`             | Delete selected rule       |
-| `R`             | Refresh rules              |
-| `P`             | Paste import rules         |
-| `M`             | Move selected rule to position |
-| `↑`/`↓`        | Navigate rule list         |
-| `Alt+↑`         | Move selected rule up      |
-| `Alt+↓`         | Move selected rule down    |
-| `/`             | Focus search filter        |
+---
 
-> Mouse navigation is also fully supported — click nav bar items, buttons, and table cells.
+## 🚀 Quick Start
 
-## Quick Start
+> 📖 For comprehensive installation instructions and troubleshooting, see [**QUICKSTART.md**](QUICKSTART.md).
 
 ### Prerequisites
 
-- Go 1.24.1 or higher
-- A terminal with 256-color and mouse support
-- A running [Mihomo](https://github.com/MetaCubeX/mihomo) instance with external-controller enabled
+1. **Go 1.24.1+** (for building from source)
+2. **Terminal with UTF-8, 256-color, and mouse support** (e.g. iTerm2, WezTerm, Alacritty, Windows Terminal)
+3. A running **[Mihomo](https://github.com/MetaCubeX/mihomo)** instance with `external-controller` enabled
 
 ### Install & Run
 
 ```bash
-# Clone the repository
-git clone <your-repo-url>/mihomoTui.git
+# 1. Clone the repository
+git clone https://github.com/shuideyimei/mihomoTui.git
 cd mihomoTui
 
-# Install dependencies
+# 2. Download dependencies and run
 go mod tidy
-
-# Run the application
 go run main.go
 ```
 
-### First-Time Setup
-
-1. Start the application
-2. Navigate to the **Config** page (click nav bar or press `F4`/`Ctrl+4`)
-3. Enter your Mihomo API address (default: `http://127.0.0.1:9090`)
-4. Enter your API Secret (if configured in Mihomo)
-5. Save — config is written to `~/.config/mihomoTui/config.json`
-6. **Restart the application** for the settings to take effect
-
-The status bar at the bottom will show the current proxy mode and real-time traffic once connected.
-
-## Configuration
-
-### App Config (`~/.config/mihomoTui/config.json`)
-
-```json
-{
-  "api": {
-    "base_url": "http://127.0.0.1:9090",
-    "secret": ""
-  }
-}
-```
-
-### Mihomo Config
-
-The TUI can directly modify your running Mihomo config.yaml — it locates it by:
-1. Using `MIHOMO_CONFIG_PATH` when explicitly set
-2. Scanning `/proc` for running mihomo processes and their `-d` / `--directory` flags
-3. Falling back to common locations: `/etc/mihomo/config.yaml`, `~/.config/mihomo/config.yaml`
-
-Operations on the mihomo config (proxy groups, rules, providers) require **sudo** access to write to the config file, as it is typically owned by root.
-
-## Development
-
-### Build from Source
+### Build Binary
 
 ```bash
-# Build for current platform
+# Build for your current platform
 go build -o mihomoTui .
-
-# Cross-compile (Linux amd64)
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o mihomoTui-linux-amd64 .
-
-# Cross-compile (macOS ARM64)
-GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o mihomoTui-darwin-arm64 .
-
-# Cross-compile (Windows)
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o mihomoTui-windows-amd64.exe .
+./mihomoTui
 ```
 
-### Run Tests
+---
 
-```bash
-go test ./internal/...
+## 🛠️ Architecture Overview
+
+The application follows a clean **3-Tier Layered Architecture** with an **Event-Driven Bus**:
+
+```
+                      ┌────────────────────────────────────────┐
+                      │               main / app               │
+                      └───────────────────┬────────────────────┘
+                                          │
+        ┌─────────────────────────────────┼────────────────────────────────┐
+        ▼                                 ▼                                ▼
+┌────────────────┐               ┌────────────────┐               ┌────────────────┐
+│  Presentation  │ ──(Calls)────►│ Service Layer  │ ──(Invokes)──►│ Repository/Drv │
+│  (tview Pages) │               │ (Rule/Group/..)│               │ (YAML / API)   │
+└───────┬────────┘               └────────────────┘               └────────┬───────┘
+        │ (Subscribe / Publish)                                            │ (Atomic Write)
+        ▼                                                                  ▼
+┌────────────────┐                                                ┌────────────────┐
+│    EventBus    │ ◄───────────────────────────────────────────── │ Local Storage  │
+│ (TopicProxy..) │                                                │ (config.yaml)  │
+└────────────────┘                                                └────────────────┘
 ```
 
-## Contributing
+### Project Structure
 
-Issues and Pull Requests are welcome!
+```
+mihomoTui/
+├── main.go                          # Program entry point and log shutdown management
+├── go.mod / go.sum                  # Go module definition
+├── LICENSE                          # MIT License
+├── static/
+│   └── image.png                    # Hero overview image
+├── picture/                         # High-resolution page preview screenshots
+│
+├── internal/
+│   ├── app.go                       # Bootstrap orchestration, DI wiring, and lifecycle coordination
+│   ├── hotkey.go                    # Global keyboard event dispatcher
+│   ├── palette.go                   # Command Palette implementation
+│   │
+│   ├── api/                         # Mihomo REST API and SSE stream client
+│   ├── config/                      # App config management and low-level YAML AST manipulation
+│   ├── events/                      # Thread-safe decoupled EventBus
+│   ├── i18n/                        # Internationalization packages (zh / en dictionaries and lookup)
+│   ├── models/                      # Core domain entities (RuleDisplay, GroupEntry...)
+│   ├── parser/                      # Multi-protocol subscription parsers (Clash, Surge, V2Ray...)
+│   ├── repository/                  # Persistence interface abstractions and LocalYAMLDriver
+│   ├── service/                     # Business services (Rule, ProxyGroup, Provider, Profile)
+│   ├── subscription/                # Remote/local subscription fetcher with SSRF defense
+│   ├── types/                       # Normalized configuration document types (ConfigDocument)
+│   │
+│   └── ui/                          # TUI core components and pages
+│       ├── ui.go                    # UI thread dispatcher and modal controller
+│       ├── theme.go                 # Theme color palette and styles
+│       ├── navigation.go            # Navigation metadata and page routing definitions
+│       ├── components/              # Reusable UI widgets (Header, StatusBar, NavBar...)
+│       └── pages/                   # Feature page implementations (Dashboard, Proxies, Editor...)
+```
 
-### Development Workflow
+---
 
-1. Fork the project
-2. Create your feature branch: `git checkout -b feature/AmazingFeature`
-3. Commit your changes: `git commit -m 'Add some AmazingFeature'`
-4. Push to the branch: `git push origin feature/AmazingFeature`
-5. Open a Pull Request
+## 🤝 Contributing
 
-## License
+Contributions, issues, and feature requests are welcome!
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+1. Fork the Project
+2. Create your Feature Branch: `git checkout -b feature/AmazingFeature`
+3. Commit your Changes: `git commit -m 'feat: add some amazing feature'`
+4. Run full test suite: `go test -race -count=1 ./...`
+5. Push to the Branch: `git push origin feature/AmazingFeature`
+6. Open a Pull Request
 
-## Acknowledgments
+---
 
-- [Mihomo](https://github.com/MetaCubeX/mihomo) — The core proxy engine
-- [tview](https://github.com/rivo/tview) — Powerful terminal UI library for Go
-- [tcell](https://github.com/gdamore/tcell/v2) — Low-level terminal handling
+## 📄 License
+
+Distributed under the [MIT License](LICENSE).
+
+## 💖 Acknowledgments
+
+- [Mihomo (MetaCubeX)](https://github.com/MetaCubeX/mihomo) — High-performance core proxy engine
+- [tview](https://github.com/rivo/tview) — Rich interactive terminal UI library
+- [tcell](https://github.com/gdamore/tcell/v2) — Terminal engine and screen simulation driver

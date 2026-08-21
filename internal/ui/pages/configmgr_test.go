@@ -6,8 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"mihomoTui/internal/api"
 	"mihomoTui/internal/events"
 	"mihomoTui/internal/service"
+	"mihomoTui/internal/testapi"
 )
 
 type mockProfileRepo struct {
@@ -71,10 +73,16 @@ func TestConfigManagerMarksEditedContentDirty(t *testing.T) {
 }
 
 func TestConfigManager_ActivateDeactivate_GoroutineLeak(t *testing.T) {
-	before := runtime.NumGoroutine()
+	srv := testapi.NewMockMihomoServer()
+	defer srv.Close()
+	api.InitClient(srv.URL, "")
 
 	cm := newTestConfigManager()
 	cm.Activate()
+	time.Sleep(50 * time.Millisecond)
+
+	before := runtime.NumGoroutine()
+
 	cm.Deactivate()
 	time.Sleep(200 * time.Millisecond)
 

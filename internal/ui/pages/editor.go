@@ -3,6 +3,7 @@ package pages
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
@@ -27,6 +28,7 @@ type EditorPage struct {
 
 	tabs      []string
 	activeTab int
+	mu        sync.RWMutex
 }
 
 // NewEditorPage creates a new unified editor page.
@@ -107,28 +109,36 @@ func (e *EditorPage) switchTab(index int) {
 	if index < 0 || index >= len(e.tabs) {
 		return
 	}
+	e.mu.Lock()
 	if e.activeTab == index {
+		e.mu.Unlock()
 		return
 	}
-	if name, act := e.pages.GetFrontPage(); name != "" {
-		if a, ok := act.(ActivatablePage); ok {
-			a.Deactivate()
-		}
-	}
+	prev := e.getActivePageUnlocked()
 	e.activeTab = index
-	e.pages.SwitchToPage(e.tabs[index])
+	currPage := e.getActivePageUnlocked()
+	currPrim := e.getActivePrimitiveUnlocked()
+	tabName := e.tabs[index]
+	e.mu.Unlock()
+
+	if prev != nil {
+		prev.Deactivate()
+	}
+	e.pages.SwitchToPage(tabName)
 	e.updateTabBar()
-	if name, act := e.pages.GetFrontPage(); name != "" {
-		if a, ok := act.(ActivatablePage); ok {
-			a.Activate()
-		}
-		if act != nil {
-			ui.Updater.SetFocus(act)
-		}
+	if currPage != nil {
+		currPage.Activate()
+	}
+	if currPrim != nil {
+		ui.Updater.SetFocus(currPrim)
 	}
 }
 
 func (e *EditorPage) updateTabBar() {
+	e.mu.RLock()
+	active := e.activeTab
+	e.mu.RUnlock()
+
 	var sb strings.Builder
 	for i, tab := range e.tabs {
 		title := ""
@@ -141,7 +151,7 @@ func (e *EditorPage) updateTabBar() {
 			title = i18n.T("nav.ruleproviders")
 		}
 
-		if i == e.activeTab {
+		if i == active {
 			sb.WriteString(fmt.Sprintf(`["%s"][black:green] %s [-:-:-][""]  `, tab, title))
 		} else {
 			sb.WriteString(fmt.Sprintf(`["%s"][white] %s [-:-:-][""]  `, tab, title))
@@ -154,22 +164,57 @@ func (e *EditorPage) updateTabBar() {
 	e.tabBar.Highlight()
 }
 
+func (e *EditorPage) getActivePage() ActivatablePage {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.getActivePageUnlocked()
+}
+
+func (e *EditorPage) getActivePageUnlocked() ActivatablePage {
+	switch e.activeTab {
+	case 0:
+		if e.proxyGroups != nil {
+			return e.proxyGroups
+		}
+	case 1:
+		if e.rules != nil {
+			return e.rules
+		}
+	case 2:
+		if e.providers != nil {
+			return e.providers
+		}
+	}
+	return nil
+}
+
+func (e *EditorPage) getActivePrimitiveUnlocked() tview.Primitive {
+	switch e.activeTab {
+	case 0:
+		if e.proxyGroups != nil {
+			return e.proxyGroups
+		}
+	case 1:
+		if e.rules != nil {
+			return e.rules
+		}
+	case 2:
+		if e.providers != nil {
+			return e.providers
+		}
+	}
+	return nil
+}
+
 func (e *EditorPage) Activate() {
-	if name, act := e.pages.GetFrontPage(); name != "" {
-		if a, ok := act.(ActivatablePage); ok {
-			a.Activate()
-		}
-		if act != nil {
-			ui.Updater.SetFocus(act)
-		}
+	if a := e.getActivePage(); a != nil {
+		a.Activate()
 	}
 }
 
 func (e *EditorPage) Deactivate() {
-	if name, act := e.pages.GetFrontPage(); name != "" {
-		if a, ok := act.(ActivatablePage); ok {
-			a.Deactivate()
-		}
+	if a := e.getActivePage(); a != nil {
+		a.Deactivate()
 	}
 }
 

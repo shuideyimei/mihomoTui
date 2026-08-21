@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"mihomoTui/internal/api"
+	"mihomoTui/internal/testapi"
 	"mihomoTui/internal/ui"
 
 	"github.com/rivo/tview"
@@ -27,16 +28,20 @@ func TestNewConnectionsPage_NonNil(t *testing.T) {
 }
 
 func TestConnections_ActivateDeactivate_GoroutineLeak(t *testing.T) {
-	// Record baseline goroutine count before creating any pages
-	baseCount := runtime.NumGoroutine()
+	srv := testapi.NewMockMihomoServer()
+	defer srv.Close()
+	api.InitClient(srv.URL, "")
 
 	c := NewConnectionsPage()
 	c.Activate()
+	time.Sleep(50 * time.Millisecond)
+
+	baseCount := runtime.NumGoroutine()
+
 	c.Deactivate()
 
 	// Allow goroutines to settle: the auto-refresh goroutine (started by
-	// Activate) must observe the cancelled context and exit, and any
-	// inflight API call or queued UI update must complete.
+	// Activate) must observe the cancelled context and exit.
 	time.Sleep(200 * time.Millisecond)
 
 	finalCount := runtime.NumGoroutine()

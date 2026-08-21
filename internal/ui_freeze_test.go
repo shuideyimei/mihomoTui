@@ -41,6 +41,9 @@ func TestFullAppPageSwitching_NoFreeze(t *testing.T) {
 	go appInstance.Run()
 	defer appInstance.Stop()
 
+	// Wait for event loop to initialize
+	time.Sleep(100 * time.Millisecond)
+
 	done := make(chan bool, 1)
 	go func() {
 		// Cycle through all 8 pages 3 times
@@ -75,6 +78,9 @@ func TestEditorSubtabs_HighFrequencySwitching(t *testing.T) {
 	appInstance, _ := createTestApp(t)
 	go appInstance.Run()
 	defer appInstance.Stop()
+
+	// Wait for event loop to initialize
+	time.Sleep(100 * time.Millisecond)
 
 	// Switch to Editor page (F7)
 	ui.Updater.PostUi(func() {

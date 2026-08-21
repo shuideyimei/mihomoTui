@@ -15,11 +15,13 @@ func TestEditorShiftTabLiveEventLoop(t *testing.T) {
 	go appInstance.Run()
 	defer appInstance.Stop()
 
+	time.Sleep(100 * time.Millisecond)
+
 	// Switch to Editor page (index 7)
 	ui.Updater.PostUi(func() {
 		appInstance.switchPage(7)
 	})
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	_, ok := appInstance.pageLifecycle["editor"].(*pages.EditorPage)
 	if !ok {

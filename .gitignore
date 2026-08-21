@@ -25,6 +25,16 @@ Thumbs.db
 # --- Go --#
 vendor/
 
+# --- Python / MCP ---
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.egg-info/
+**/*.egg-info/
+*.py[cod]
+**/*.py[cod]
+
 # --- Vibe coding artifacts ---
 TODO.md
 ROADMAP.md

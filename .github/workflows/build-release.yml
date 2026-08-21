@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version (for example, v1.2.3)
+        description: Release version (e.g. v0.1.0)
         required: true
         type: string
 
@@ -19,123 +19,161 @@ env:
 
 jobs:
   build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
-    
     strategy:
+      fail-fast: false
       matrix:
         include:
           - goos: linux
             goarch: amd64
-            suffix: ""
+            archive_format: tar.gz
           - goos: linux
             goarch: arm64
-            suffix: ""
+            archive_format: tar.gz
           - goos: darwin
             goarch: amd64
-            suffix: ""
+            archive_format: tar.gz
           - goos: darwin
             goarch: arm64
-            suffix: ""
+            archive_format: tar.gz
           - goos: windows
             goarch: amd64
             suffix: ".exe"
+            archive_format: zip
+          - goos: windows
+            goarch: arm64
+            suffix: ".exe"
+            archive_format: zip
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.24.x'
-        cache: true
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: true
 
-    - name: Get version from tag
-      id: version
-      env:
-        VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
-      run: |
-        case "$VERSION" in
-          *[!A-Za-z0-9._+-]*) echo "Invalid version: $VERSION"; exit 1 ;;
-        esac
-        echo "APP_VERSION=${VERSION}" >> $GITHUB_OUTPUT
-        echo "Version: ${VERSION}"
+      - name: Resolve version
+        id: version
+        env:
+          VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+        run: |
+          case "$VERSION" in
+            *[!A-Za-z0-9._+-]*) echo "Invalid version: $VERSION"; exit 1 ;;
+          esac
+          echo "APP_VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
 
-    - name: Build binary
-      env:
-        GOOS: ${{ matrix.goos }}
-        GOARCH: ${{ matrix.goarch }}
-        CGO_ENABLED: 0
-      run: |
-        mkdir -p dist
-        BINARY_NAME="${{ env.APP_NAME }}-${{ steps.version.outputs.APP_VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}"
-        go build -ldflags "-X main.appName=${{ env.APP_NAME }} -X main.appVersion=${{ steps.version.outputs.APP_VERSION }}" -o "dist/${BINARY_NAME}" .
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p build_stage
+          BIN_NAME="${{ env.APP_NAME }}${{ matrix.suffix }}"
+          go build -trimpath \
+            -ldflags "-s -w -X main.appName=${{ env.APP_NAME }} -X main.appVersion=${{ steps.version.outputs.APP_VERSION }}" \
+            -o "build_stage/${BIN_NAME}" .
+          
+          # Copy docs into staging
+          cp README.md README_ZH.md LICENSE build_stage/ 2>/dev/null || true
 
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.APP_NAME }}-${{ steps.version.outputs.APP_VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: dist/${{ env.APP_NAME }}-${{ steps.version.outputs.APP_VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
+      - name: Package archive
+        id: package
+        run: |
+          mkdir -p dist
+          ARCHIVE_BASE="${{ env.APP_NAME }}_${{ steps.version.outputs.APP_VERSION }}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          
+          cd build_stage
+          if [ "${{ matrix.archive_format }}" = "zip" ]; then
+            sudo apt-get update -y && sudo apt-get install -y zip
+            zip -r "../dist/${ARCHIVE_BASE}.zip" ./*
+            echo "ARCHIVE_FILE=${ARCHIVE_BASE}.zip" >> $GITHUB_OUTPUT
+          else
+            tar -czvf "../dist/${ARCHIVE_BASE}.tar.gz" ./*
+            echo "ARCHIVE_FILE=${ARCHIVE_BASE}.tar.gz" >> $GITHUB_OUTPUT
+          fi
+          cd ..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}_${{ steps.version.outputs.APP_VERSION }}_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: dist/*
+          retention-days: 7
 
   release:
     needs: build
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Get version from tag
-      id: version
-      env:
-        VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
-      run: |
-        echo "APP_VERSION=${VERSION}" >> $GITHUB_OUTPUT
-    
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: ./artifacts
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Generate changelog
-      id: changelog
-      run: |
-        # Get last tag
-        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-        if [ -z "$PREVIOUS_TAG" ]; then
-          # If there is no previous tag, get all commits
-          CHANGELOG=$(git log --oneline --format="- %s (%h)")
-        else
-          # Get commits from last tag to current
-          CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --oneline --format="- %s (%h)")
-        fi
+      - name: Resolve version
+        id: version
+        env:
+          VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+        run: |
+          echo "APP_VERSION=${VERSION}" >> $GITHUB_OUTPUT
 
-        # Convert newlines to a format that GitHub Actions can process
-        CHANGELOG="${CHANGELOG//'%'/'%25'}"
-        CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
-        CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
-        
-        echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./dist_download
 
-    - name: Create release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ steps.version.outputs.APP_VERSION }}
-        name: Release ${{ steps.version.outputs.APP_VERSION }}
-        body: |
-          ## mihomoTui ${{ steps.version.outputs.APP_VERSION }}
+      - name: Prepare release files and checksums
+        id: prepare
+        run: |
+          mkdir -p release_assets
+          # Move all archives from downloaded artifacts into release_assets
+          find ./dist_download -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release_assets/ \;
+          
+          cd release_assets
+          sha256sum * > checksums.txt
+          cat checksums.txt
+          cd ..
 
-          ### 🎉 Updates
-          ${{ steps.changelog.outputs.changelog }}
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREVIOUS_TAG" ]; then
+            CHANGELOG=$(git log --oneline --format="- %s (%h)")
+          else
+            CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --oneline --format="- %s (%h)")
+          fi
 
-          ### 📦 Download Links
-          - Linux AMD64: [mihomoTui-${{ steps.version.outputs.APP_VERSION }}-linux-amd64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.APP_VERSION }}/mihomoTui-${{ steps.version.outputs.APP_VERSION }}-linux-amd64)
-          - Linux ARM64: [mihomoTui-${{ steps.version.outputs.APP_VERSION }}-linux-arm64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.APP_VERSION }}/mihomoTui-${{ steps.version.outputs.APP_VERSION }}-linux-arm64)
-          - macOS AMD64: [mihomoTui-${{ steps.version.outputs.APP_VERSION }}-darwin-amd64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.APP_VERSION }}/mihomoTui-${{ steps.version.outputs.APP_VERSION }}-darwin-amd64)
-          - macOS ARM64: [mihomoTui-${{ steps.version.outputs.APP_VERSION }}-darwin-arm64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.APP_VERSION }}/mihomoTui-${{ steps.version.outputs.APP_VERSION }}-darwin-arm64)
-          - Windows AMD64: [mihomoTui-${{ steps.version.outputs.APP_VERSION }}-windows-amd64.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.APP_VERSION }}/mihomoTui-${{ steps.version.outputs.APP_VERSION }}-windows-amd64.exe)
-        files: artifacts/**/*
-        draft: false
-        prerelease: ${{ contains(steps.version.outputs.APP_VERSION, 'alpha') || contains(steps.version.outputs.APP_VERSION, 'beta') || contains(steps.version.outputs.APP_VERSION, 'rc') }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANGELOG="${CHANGELOG//'%'/'%25'}"
+          CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
+          CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
+          echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.APP_VERSION }}
+          name: Release ${{ steps.version.outputs.APP_VERSION }}
+          body: |
+            # mihomoTui ${{ steps.version.outputs.APP_VERSION }}
+
+            Terminal UI Client for Mihomo Proxy Management.
+
+            ### 🚀 Highlights & Changelog
+            ${{ steps.changelog.outputs.changelog }}
+
+            ### 📦 Verification
+            To verify downloaded file integrity:
+            ```bash
+            sha256sum -c checksums.txt
+            ```
+          files: release_assets/*
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.APP_VERSION, 'alpha') || contains(steps.version.outputs.APP_VERSION, 'beta') || contains(steps.version.outputs.APP_VERSION, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

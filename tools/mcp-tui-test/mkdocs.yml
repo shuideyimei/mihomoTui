@@ -1,0 +1,35 @@
+site_name: MCP TUI Test
+site_description: Like Playwright, but for Terminal User Interfaces
+site_author: MCP TUI Test Contributors
+site_url: https://georgepearse.github.io/mcp-tui-test/
+
+repo_name: GeorgePearse/mcp-tui-test
+repo_url: https://github.com/GeorgePearse/mcp-tui-test
+
+theme: cinder
+
+extra_css:
+  - stylesheets/custom.css
+
+plugins:
+  - search
+  - localsearch  # Makes search work locally
+  - git-revision-date-localized
+  - mermaid2
+
+markdown_extensions:
+  - def_list
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Examples: examples.md
+
+copyright: Copyright &copy; 2025 MCP TUI Test Contributors

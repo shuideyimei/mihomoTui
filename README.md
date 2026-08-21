@@ -171,7 +171,24 @@
 2. **Terminal with UTF-8, 256-color, and mouse support** (e.g. iTerm2, WezTerm, Alacritty, Windows Terminal)
 3. A running **[Mihomo](https://github.com/MetaCubeX/mihomo)** instance with `external-controller` enabled
 
-### Install & Run
+### Method 1: Install via Go (Recommended)
+
+```bash
+go install github.com/shuideyimei/mihomoTui@latest
+mihomoTui
+```
+
+### Method 2: Download Pre-built Binaries
+
+Download the latest release archive for your platform from [GitHub Releases](https://github.com/shuideyimei/mihomoTui/releases):
+
+```bash
+# Example for macOS (Apple Silicon)
+tar -zxvf mihomoTui_v0.1.0_darwin_arm64.tar.gz
+./mihomoTui
+```
+
+### Method 3: Build from Source
 
 ```bash
 # 1. Clone the repository
@@ -181,14 +198,6 @@ cd mihomoTui
 # 2. Download dependencies and run
 go mod tidy
 go run main.go
-```
-
-### Build Binary
-
-```bash
-# Build for your current platform
-go build -o mihomoTui .
-./mihomoTui
 ```
 
 ---

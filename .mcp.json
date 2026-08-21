@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "tui-test": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "tools/mcp-tui-test",
+        "python",
+        "server.py"
+      ]
+    }
+  }
+}

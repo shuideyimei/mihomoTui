@@ -171,7 +171,24 @@
 2. **支持 256 色 / UTF-8 与鼠标事件的终端**（如 iTerm2, WezTerm, Alacritty, Windows Terminal 等）
 3. 正在运行且开启了 `external-controller` 的 **[Mihomo](https://github.com/MetaCubeX/mihomo)** 核心
 
-### 一键安装与运行
+### 方式 1：通过 Go 一键安装（推荐）
+
+```bash
+go install github.com/shuideyimei/mihomoTui@latest
+mihomoTui
+```
+
+### 方式 2：下载预编译二进制
+
+前往 [GitHub Releases](https://github.com/shuideyimei/mihomoTui/releases) 页面下载对应操作系统的最新压缩包（Linux / macOS / Windows），解压后即可直接运行：
+
+```bash
+# 以 macOS (Apple Silicon) 为例
+tar -zxvf mihomoTui_v0.1.0_darwin_arm64.tar.gz
+./mihomoTui
+```
+
+### 方式 3：源码克隆构建
 
 ```bash
 # 1. 克隆代码仓库
@@ -181,14 +198,6 @@ cd mihomoTui
 # 2. 安装依赖并编译运行
 go mod tidy
 go run main.go
-```
-
-### 从预编译二进制直接运行
-
-```bash
-# 本地快速构建
-go build -o mihomoTui .
-./mihomoTui
 ```
 
 ---

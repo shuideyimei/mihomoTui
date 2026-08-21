@@ -73,6 +73,7 @@ func InitLogging() func() {
 }
 
 var (
+	clientInitMu sync.Mutex
 	Client       *HttpClient
 	StreamClient *HttpClient
 )
@@ -86,8 +87,15 @@ type HttpClient struct {
 }
 
 func InitClient(baseURL, secret string) {
-	Client = NewClient(baseURL, secret)
-	StreamClient = NewStreamClient(baseURL, secret)
+	clientInitMu.Lock()
+	defer clientInitMu.Unlock()
+
+	if Client == nil {
+		Client = NewClient(baseURL, secret)
+		StreamClient = NewStreamClient(baseURL, secret)
+		return
+	}
+	UpdateClient(baseURL, secret)
 }
 
 // NewClient returns an independent API client for regular requests.
@@ -227,7 +235,12 @@ func (c *HttpClient) GetVersion() (*models.Version, error) {
 
 // GetConfig retrieves the current configuration
 func (c *HttpClient) GetConfig() (*models.Config, error) {
-	resp, err := c.makeRequest("GET", "/configs", nil)
+	return c.GetConfigWithContext(context.Background())
+}
+
+// GetConfigWithContext retrieves the current configuration using the given context
+func (c *HttpClient) GetConfigWithContext(ctx context.Context) (*models.Config, error) {
+	resp, err := c.makeRequestWithContext(ctx, "GET", "/configs", nil)
 	if err != nil {
 		return nil, err
 	}

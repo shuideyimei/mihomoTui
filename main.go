@@ -30,7 +30,6 @@ func main() {
 
 	// Run the application
 	if err := app.Run(); err != nil {
-		app.Stop()
 		log.Fatalf("Failed to run application: %v", err)
 	}
 }

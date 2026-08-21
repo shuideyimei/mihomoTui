@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/events"
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/ui"
 	"mihomoTui/internal/ui/components"
@@ -16,6 +17,7 @@ import (
 type Settings struct {
 	*tview.Flex
 	configManager *config.Manager
+	bus           *events.Bus
 
 	backupBtn  *tview.Button
 	restoreBtn *tview.Button
@@ -25,10 +27,11 @@ type Settings struct {
 	langStatus *tview.TextView
 }
 
-func newSettingsPage(cm *config.Manager, appName, appVersion string) *Settings {
+func newSettingsPage(cm *config.Manager, appName, appVersion string, bus *events.Bus) *Settings {
 	s := &Settings{
 		Flex:          tview.NewFlex().SetDirection(tview.FlexRow),
 		configManager: cm,
+		bus:           bus,
 	}
 
 	s.AddItem(s.buildBackupSection(), 0, 1, false)
@@ -122,6 +125,10 @@ func (s *Settings) buildLangSection() *tview.Flex {
 
 		// Refresh UI texts that can be updated dynamically
 		s.refreshTexts()
+
+		if s.bus != nil {
+			s.bus.Publish(events.TopicLanguageChanged, events.LanguageChangedEvent{Language: string(newLang)})
+		}
 	})
 
 	btnFlex := tview.NewFlex().

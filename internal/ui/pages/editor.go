@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"mihomoTui/internal/i18n"
+	"mihomoTui/internal/ui"
 	proxygroupspage "mihomoTui/internal/ui/pages/proxygroups"
 	rproviders "mihomoTui/internal/ui/pages/ruleproviders"
 
@@ -51,9 +52,14 @@ func NewEditorPage(proxyGroups *proxygroupspage.Page, rules *RulesPage, provider
 func (e *EditorPage) setupUI() {
 	e.tabBar.SetHighlightedFunc(func(added, removed, remaining []string) {
 		if len(added) > 0 {
+			target := added[0]
 			for i, tab := range e.tabs {
-				if tab == added[0] {
-					e.switchTab(i)
+				if tab == target {
+					if i != e.activeTab {
+						e.switchTab(i)
+					} else {
+						e.tabBar.Highlight()
+					}
 					break
 				}
 			}
@@ -70,17 +76,22 @@ func (e *EditorPage) setupUI() {
 
 	e.updateTabBar()
 
-	// Handle left/right to switch tabs if focused on tabbar,
-	// but mostly we want Ctrl+Left / Ctrl+Right or something similar globally on this page
+	// Handle Tab/Shift+Tab to switch subtabs (unless inside an input/form)
 	e.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyTab {
-			e.activeTab = (e.activeTab + 1) % len(e.tabs)
-			e.switchTab(e.activeTab)
+		if app := ui.Updater.GetApp(); app != nil {
+			switch app.GetFocus().(type) {
+			case *tview.InputField, *tview.TextArea, *tview.Form, *tview.DropDown:
+				return event
+			}
+		}
+
+		isBacktab := event.Key() == tcell.KeyBacktab || (event.Key() == tcell.KeyTab && event.Modifiers()&tcell.ModShift != 0)
+		if isBacktab {
+			e.switchTab((e.activeTab - 1 + len(e.tabs)) % len(e.tabs))
 			return nil
 		}
-		if event.Key() == tcell.KeyBacktab {
-			e.activeTab = (e.activeTab - 1 + len(e.tabs)) % len(e.tabs)
-			e.switchTab(e.activeTab)
+		if event.Key() == tcell.KeyTab {
+			e.switchTab((e.activeTab + 1) % len(e.tabs))
 			return nil
 		}
 		return event
@@ -91,9 +102,25 @@ func (e *EditorPage) switchTab(index int) {
 	if index < 0 || index >= len(e.tabs) {
 		return
 	}
+	if e.activeTab == index {
+		return
+	}
+	if name, act := e.pages.GetFrontPage(); name != "" {
+		if a, ok := act.(ActivatablePage); ok {
+			a.Deactivate()
+		}
+	}
 	e.activeTab = index
 	e.pages.SwitchToPage(e.tabs[index])
 	e.updateTabBar()
+	if name, act := e.pages.GetFrontPage(); name != "" {
+		if a, ok := act.(ActivatablePage); ok {
+			a.Activate()
+		}
+		if p, ok := act.(tview.Primitive); ok {
+			ui.Updater.SetFocus(p)
+		}
+	}
 }
 
 func (e *EditorPage) updateTabBar() {
@@ -110,21 +137,25 @@ func (e *EditorPage) updateTabBar() {
 		}
 
 		if i == e.activeTab {
-			sb.WriteString(fmt.Sprintf(`["%s"][black:green] %s [::-][""]  `, tab, title))
+			sb.WriteString(fmt.Sprintf(`["%s"][black:green] %s [-:-:-][""]  `, tab, title))
 		} else {
-			sb.WriteString(fmt.Sprintf(`["%s"][white:black] %s [::-][""]  `, tab, title))
+			sb.WriteString(fmt.Sprintf(`["%s"][white] %s [-:-:-][""]  `, tab, title))
 		}
 	}
 	// Add hint
 	sb.WriteString("  [gray](Tab / Shift+Tab to switch)[-]")
 
 	e.tabBar.SetText(sb.String())
+	e.tabBar.Highlight()
 }
 
 func (e *EditorPage) Activate() {
 	if name, act := e.pages.GetFrontPage(); name != "" {
 		if a, ok := act.(ActivatablePage); ok {
 			a.Activate()
+		}
+		if p, ok := act.(tview.Primitive); ok {
+			ui.Updater.SetFocus(p)
 		}
 	}
 }
@@ -135,4 +166,24 @@ func (e *EditorPage) Deactivate() {
 			a.Deactivate()
 		}
 	}
+}
+
+// UpdateTexts refreshes tab bar texts and sub-page texts on language change
+func (e *EditorPage) UpdateTexts() {
+	ui.Updater.PostUi(func() {
+		e.updateTabBar()
+		if e.proxyGroups != nil {
+			if u, ok := interface{}(e.proxyGroups).(interface{ UpdateTexts() }); ok {
+				u.UpdateTexts()
+			}
+		}
+		if e.rules != nil {
+			e.rules.UpdateTexts()
+		}
+		if e.providers != nil {
+			if u, ok := interface{}(e.providers).(interface{ UpdateTexts() }); ok {
+				u.UpdateTexts()
+			}
+		}
+	})
 }

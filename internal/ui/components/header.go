@@ -82,3 +82,10 @@ func (h *Header) SetHeaderInfo() {
 		h.updateContent()
 	})
 }
+
+// UpdateTexts refreshes the header labels when language changes.
+func (h *Header) UpdateTexts() {
+	ui.Updater.UpdateUi(func() {
+		h.updateContent()
+	})
+}

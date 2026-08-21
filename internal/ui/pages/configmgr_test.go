@@ -5,17 +5,57 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"mihomoTui/internal/events"
+	"mihomoTui/internal/service"
 )
 
+type mockProfileRepo struct {
+	profiles []string
+	current  string
+}
+
+func (m *mockProfileRepo) FindAllProfiles() []string {
+	return m.profiles
+}
+func (m *mockProfileRepo) GetCurrentProfilePath() string {
+	return m.current
+}
+func (m *mockProfileRepo) ReadProfile(path string) (string, error) {
+	return "mode: rule", nil
+}
+func (m *mockProfileRepo) WriteProfile(path, content string) error {
+	return nil
+}
+func (m *mockProfileRepo) DeleteProfile(path string) error {
+	return nil
+}
+func (m *mockProfileRepo) ValidateProfile(path string) error {
+	return nil
+}
+func (m *mockProfileRepo) EnsureSafePath(cfgPath, path string) ([]string, error) {
+	return nil, nil
+}
+
+func newTestConfigManager() *ConfigManager {
+	bus := events.NewBus()
+	repo := &mockProfileRepo{
+		profiles: []string{"/tmp/config1.yaml", "/tmp/config2.yaml"},
+		current:  "/tmp/config1.yaml",
+	}
+	profileService := service.NewProfileService(repo, bus)
+	return NewConfigManager(profileService, bus)
+}
+
 func TestConfigManager_New_NonNil(t *testing.T) {
-	cm := NewConfigManager()
+	cm := newTestConfigManager()
 	if cm == nil {
 		t.Fatal("NewConfigManager() returned nil")
 	}
 }
 
 func TestConfigManagerMarksEditedContentDirty(t *testing.T) {
-	cm := NewConfigManager()
+	cm := newTestConfigManager()
 	cm.editMode = true
 	cm.editPath = "/tmp/config.yaml"
 	cm.editOriginal = "mixed-port: 7890\n"
@@ -33,7 +73,7 @@ func TestConfigManagerMarksEditedContentDirty(t *testing.T) {
 func TestConfigManager_ActivateDeactivate_GoroutineLeak(t *testing.T) {
 	before := runtime.NumGoroutine()
 
-	cm := NewConfigManager()
+	cm := newTestConfigManager()
 	cm.Activate()
 	cm.Deactivate()
 	time.Sleep(200 * time.Millisecond)
@@ -46,7 +86,7 @@ func TestConfigManager_ActivateDeactivate_GoroutineLeak(t *testing.T) {
 }
 
 func TestConfigManager_DeactivateNoPanic(t *testing.T) {
-	cm := NewConfigManager()
+	cm := newTestConfigManager()
 
 	defer func() {
 		if r := recover(); r != nil {

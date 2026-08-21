@@ -29,14 +29,28 @@ func FindAllConfigFiles() []string {
 		addUnique(path)
 	}
 
-	for _, dir := range findMihomoProcessConfig() {
-		addUnique(filepath.Join(dir, "config.yaml"))
+	for _, p := range findMihomoProcessConfig() {
+		if fileExists(p) && !isDir(p) {
+			addUnique(p)
+		}
+		addUnique(filepath.Join(p, "config.yaml"))
+		addUnique(filepath.Join(p, "clash-verge.yaml"))
+		addUnique(filepath.Join(p, "config.yml"))
 	}
 
+	home := os.ExpandEnv("$HOME")
 	wellKnown := []string{
+		filepath.Join(home, "Library", "Application Support", "io.github.clash-verge-rev.clash-verge-rev", "clash-verge.yaml"),
+		filepath.Join(home, "Library", "Application Support", "clash-verge", "clash-verge.yaml"),
+		filepath.Join(home, "Library", "Application Support", "clash-verge", "config.yaml"),
+		filepath.Join(home, "Library", "Application Support", "Mihomo Party", "config.yaml"),
+		filepath.Join(home, "Library", "Application Support", "clash.meta", "config.yaml"),
+		filepath.Join(home, "Library", "Application Support", "ClashX", "config.yaml"),
+		filepath.Join(home, ".config", "mihomo", "config.yaml"),
+		filepath.Join(home, ".config", "clash", "config.yaml"),
 		"/opt/clashtui/mihomo/config/config.yaml",
 		"/etc/mihomo/config.yaml",
-		filepath.Join(os.ExpandEnv("$HOME"), ".config", "mihomo", "config.yaml"),
+		"/etc/clash/config.yaml",
 	}
 	for _, p := range wellKnown {
 		addUnique(p)
@@ -44,7 +58,21 @@ func FindAllConfigFiles() []string {
 
 	dirs := []string{
 		"/etc/mihomo",
-		filepath.Join(os.ExpandEnv("$HOME"), ".config", "mihomo"),
+		"/etc/clash",
+		filepath.Join(home, ".config", "mihomo"),
+		filepath.Join(home, ".config", "clash"),
+		filepath.Join(home, ".config", "clash-verge"),
+		filepath.Join(home, ".config", "clash-nyanpasu"),
+		filepath.Join(home, "Library", "Application Support", "io.github.clash-verge-rev.clash-verge-rev"),
+		filepath.Join(home, "Library", "Application Support", "clash-verge"),
+		filepath.Join(home, "Library", "Application Support", "clash-verge-rev"),
+		filepath.Join(home, "Library", "Application Support", "Mihomo Party"),
+		filepath.Join(home, "Library", "Application Support", "clash.meta"),
+		filepath.Join(home, "Library", "Application Support", "ClashX"),
+		filepath.Join(home, "Library", "Application Support", "io.github.clash-verge-rev.clash-verge-rev", "profiles"),
+		filepath.Join(home, "Library", "Application Support", "clash-verge", "profiles"),
+		filepath.Join(home, ".config", "mihomo", "profiles"),
+		filepath.Join(home, ".config", "clash", "profiles"),
 	}
 	for _, dir := range dirs {
 		entries, err := os.ReadDir(dir)

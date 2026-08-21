@@ -54,12 +54,12 @@ func (fn *FocusNavigator) Index() int {
 // FocusNext returns an InputCapture handler that calls Next on Tab and Prev on Backtab.
 func (fn *FocusNavigator) FocusNext() func(event *tcell.EventKey) *tcell.EventKey {
 	return func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyTAB:
-			fn.Next()
-			return nil
-		case tcell.KeyBacktab:
+		if event.Key() == tcell.KeyBacktab || (event.Key() == tcell.KeyTAB && event.Modifiers()&tcell.ModShift != 0) {
 			fn.Prev()
+			return nil
+		}
+		if event.Key() == tcell.KeyTAB {
+			fn.Next()
 			return nil
 		}
 		return event

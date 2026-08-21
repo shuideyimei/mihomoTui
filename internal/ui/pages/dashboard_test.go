@@ -64,17 +64,16 @@ func newDashboardMockServer() *httptest.Server {
 }
 
 // ---------------------------------------------------------------------------
-// TestNewDashboard_NonNil
+// TestNewDashboardPage_NonNil
 // ---------------------------------------------------------------------------
 
-func TestNewDashboard_NonNil(t *testing.T) {
-	dash := NewDashboard()
+func TestNewDashboardPage_NonNil(t *testing.T) {
+	dash := NewDashboardPage()
 	if dash == nil {
-		t.Fatal("NewDashboard() returned nil")
+		t.Fatal("NewDashboardPage() returned nil")
 	}
-	// NewDashboard now returns *DashboardPage directly
 	if _, ok := interface{}(dash).(ActivatablePage); !ok {
-		t.Fatal("NewDashboard() does not implement ActivatablePage")
+		t.Fatal("NewDashboardPage() does not implement ActivatablePage")
 	}
 }
 
@@ -89,7 +88,7 @@ func TestDashboard_ActivateDeactivate_GoroutineLeak(t *testing.T) {
 
 	baseCount := runtime.NumGoroutine()
 
-	dash := NewDashboard()
+	dash := NewDashboardPage()
 	dash.Activate()
 	dash.Deactivate()
 
@@ -112,9 +111,9 @@ func TestDashboard_ActivateDeactivate_GoroutineLeak(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDashboard_BasicLayout(t *testing.T) {
-	dash := NewDashboard()
+	dash := NewDashboardPage()
 	if dash == nil {
-		t.Fatal("NewDashboard() returned nil")
+		t.Fatal("NewDashboardPage() returned nil")
 	}
 
 	// All of these are created in setupLayout / create* helpers and must be
@@ -158,7 +157,7 @@ func TestDashboard_RefreshDoesNotPanic(t *testing.T) {
 	defer srv.Close()
 	api.UpdateClient(srv.URL, "")
 
-	dash := NewDashboard()
+	dash := NewDashboardPage()
 
 	defer func() {
 		if r := recover(); r != nil {

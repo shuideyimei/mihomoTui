@@ -129,3 +129,10 @@ func (n *NavBar) SelectItem(index int) {
 		n.rebuild()
 	}
 }
+
+// UpdateItems updates page items and refreshes the title and labels
+func (n *NavBar) UpdateItems(items []ui.PageInfo) {
+	n.items = append([]ui.PageInfo(nil), items...)
+	n.SetTitle(" " + i18n.T("nav.title") + " ")
+	n.rebuild()
+}

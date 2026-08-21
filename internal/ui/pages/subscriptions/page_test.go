@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"mihomoTui/internal/models"
+	"mihomoTui/internal/service"
 	"mihomoTui/internal/subscription"
 	"mihomoTui/internal/ui"
 
@@ -12,13 +14,48 @@ import (
 	"github.com/rivo/tview"
 )
 
+type mockProviderRepo struct{}
+
+func (m *mockProviderRepo) GetProxyProviders() ([]models.ProviderInfo, error) {
+	return nil, nil
+}
+func (m *mockProviderRepo) AddProxyProvider(name, url string) (string, error) {
+	return "", nil
+}
+func (m *mockProviderRepo) AddLocalProxyProvider(name, localPath string) (string, error) {
+	return "", nil
+}
+func (m *mockProviderRepo) RemoveProxyProvider(name string) error {
+	return nil
+}
+func (m *mockProviderRepo) GetRuleProviders() ([]models.RuleProviderEntry, error) {
+	return nil, nil
+}
+func (m *mockProviderRepo) AddRuleProvider(name, url, behavior string, interval int) (string, error) {
+	return "", nil
+}
+func (m *mockProviderRepo) UpdateRuleProvider(name, url, behavior string, interval int) (string, error) {
+	return "", nil
+}
+func (m *mockProviderRepo) DeleteRuleProvider(name string) (string, error) {
+	return "", nil
+}
+func (m *mockProviderRepo) BatchAddRuleProviders(providers []models.RuleProviderEntry) (string, error) {
+	return "", nil
+}
+
+func newTestProviderService() *service.ProviderService {
+	subMgr := subscription.NewManager()
+	return service.NewProviderService(&mockProviderRepo{}, subMgr)
+}
+
 // ---------------------------------------------------------------------------
 // TestNewPage_NonNil
 // ---------------------------------------------------------------------------
 
 func TestNewPage_NonNil(t *testing.T) {
-	subMgr := subscription.NewManager()
-	page := NewPage(subMgr)
+	svc := newTestProviderService()
+	page := NewPage(svc)
 	if page == nil {
 		t.Fatal("NewPage() returned nil")
 	}
@@ -79,12 +116,11 @@ func TestPage_ActivateDeactivate_GoroutineLeak(t *testing.T) {
 	// ui.Updater.UpdateUi -> app.QueueUpdateDraw is processed.
 	go app.Run()
 
-	subMgr := subscription.NewManager()
-	page := NewPage(subMgr)
+	svc := newTestProviderService()
+	page := NewPage(svc)
 	before := runtime.NumGoroutine()
 
-	// Activate starts: go p.refresh() which calls config.GetMihomoProxyProviders()
-	// (will fail quickly — no config) then queues a UI update via ui.Updater.UpdateUi.
+	// Activate starts: go p.refresh() which calls providerService.GetProxyProviders()
 	page.Activate()
 	time.Sleep(20 * time.Millisecond)
 
@@ -108,8 +144,8 @@ func TestPage_ActivateDeactivate_GoroutineLeak(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPage_DeactivateNoPanic(t *testing.T) {
-	subMgr := subscription.NewManager()
-	page := NewPage(subMgr)
+	svc := newTestProviderService()
+	page := NewPage(svc)
 
 	defer func() {
 		if r := recover(); r != nil {

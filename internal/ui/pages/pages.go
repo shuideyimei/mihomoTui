@@ -2,9 +2,9 @@ package pages
 
 import (
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/events"
+	"mihomoTui/internal/service"
 	"mihomoTui/internal/ui"
-	proxygroupspage "mihomoTui/internal/ui/pages/proxygroups"
-	rproviders "mihomoTui/internal/ui/pages/ruleproviders"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -21,44 +21,6 @@ type NavigationGuard interface {
 	RequestDeactivate(continueNavigation func()) bool
 }
 
-// NewDashboard creates a new dashboard page
-func NewDashboard() *DashboardPage {
-	return NewDashboardPage()
-}
-
-// NewProxies creates a new proxies page
-func NewProxies() *ProxiesPage {
-	return NewProxiesPage()
-}
-
-// NewConnections creates a new connections page
-func NewConnections() *ConnectionsPage {
-	return NewConnectionsPage()
-}
-
-// NewConfig creates a new config page
-func NewConfig(configManager *config.Manager) *ConfigPage {
-	return NewConfigPage(configManager)
-}
-
-// NewLogs creates a new logs page
-func NewLogs() *LogsPage {
-	return NewLogsPage()
-}
-
-// NewEditor creates a new unified editor page
-func NewEditor(proxyGroups *proxygroupspage.Page, rules *RulesPage, providers *rproviders.Page) *EditorPage {
-	return NewEditorPage(proxyGroups, rules, providers)
-}
-func NewProxyGroups() *proxygroupspage.Page {
-	return proxygroupspage.NewPage()
-}
-
-// NewRules creates a new rules management page
-func NewRules() *RulesPage {
-	return NewRulesPage()
-}
-
 // UnifiedSettingsPage wraps the API Config and UI Settings side by side
 type UnifiedSettingsPage struct {
 	*tview.Flex
@@ -66,32 +28,25 @@ type UnifiedSettingsPage struct {
 	settings   *Settings
 }
 
-func NewUnifiedSettings(configManager *config.Manager, appName, appVersion string) *UnifiedSettingsPage {
+func NewUnifiedSettings(configManager *config.Manager, appName, appVersion string, bus *events.Bus) *UnifiedSettingsPage {
 	u := &UnifiedSettingsPage{
 		Flex:       tview.NewFlex().SetDirection(tview.FlexColumn),
 		configPage: NewConfigPage(configManager),
-		settings:   newSettingsPage(configManager, appName, appVersion),
+		settings:   newSettingsPage(configManager, appName, appVersion, bus),
 	}
 
 	u.AddItem(u.configPage, 0, 1, true)
 	u.AddItem(u.settings, 0, 1, false)
 
-	// Set input capture to jump between them using Tab
+	// Set input capture to jump between them using Tab / Shift+Tab
 	u.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyTab {
+		isBacktab := event.Key() == tcell.KeyBacktab || (event.Key() == tcell.KeyTab && event.Modifiers()&tcell.ModShift != 0)
+		if isBacktab || event.Key() == tcell.KeyTab {
 			// Toggle focus
 			if u.configPage.HasFocus() {
-				ui.Updater.GetApp().SetFocus(u.settings)
+				ui.Updater.SetFocus(u.settings)
 			} else {
-				ui.Updater.GetApp().SetFocus(u.configPage)
-			}
-			return nil
-		}
-		if event.Key() == tcell.KeyBacktab {
-			if u.configPage.HasFocus() {
-				ui.Updater.GetApp().SetFocus(u.settings)
-			} else {
-				ui.Updater.GetApp().SetFocus(u.configPage)
+				ui.Updater.SetFocus(u.configPage)
 			}
 			return nil
 		}
@@ -102,14 +57,27 @@ func NewUnifiedSettings(configManager *config.Manager, appName, appVersion strin
 }
 
 func (u *UnifiedSettingsPage) Activate() {
-	u.configPage.Activate()
+	if u.configPage != nil {
+		u.configPage.Activate()
+	}
 	// u.settings doesn't have Activate currently, if it does, call it
 }
 
 func (u *UnifiedSettingsPage) Deactivate() {
-	u.configPage.Deactivate()
+	if u.configPage != nil {
+		u.configPage.Deactivate()
+	}
 }
 
-func NewConfigManager() *ConfigManager {
-	return newConfigManagerPage()
+func (u *UnifiedSettingsPage) UpdateTexts() {
+	if u.settings != nil {
+		u.settings.refreshTexts()
+	}
+	if u.configPage != nil {
+		u.configPage.UpdateTexts()
+	}
+}
+
+func NewConfigManager(profileService *service.ProfileService, bus *events.Bus) *ConfigManager {
+	return newConfigManagerPage(profileService, bus)
 }

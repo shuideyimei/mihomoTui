@@ -6,9 +6,11 @@ import (
 	"strings"
 	"sync"
 
-	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
 	"mihomoTui/internal/i18n"
+	"mihomoTui/internal/models"
+	"mihomoTui/internal/repository"
+	"mihomoTui/internal/service"
 	"mihomoTui/internal/ui"
 	"mihomoTui/internal/ui/components"
 
@@ -19,7 +21,8 @@ import (
 type Page struct {
 	*tview.Flex
 
-	groups []config.ProxyGroupEntry
+	groupService *service.ProxyGroupService
+	groups       []models.ProxyGroupEntry
 
 	groupList  *tview.List
 	detailView *tview.TextView
@@ -40,13 +43,29 @@ type Page struct {
 	mu            sync.Mutex
 }
 
-func NewPage() *Page {
+func NewPage(groupService ...*service.ProxyGroupService) *Page {
+	var svc *service.ProxyGroupService
+	if len(groupService) > 0 {
+		svc = groupService[0]
+	}
 	page := &Page{
 		Flex:          tview.NewFlex(),
+		groupService:  svc,
 		selectedIndex: -1,
 	}
 	page.setupUI()
 	return page
+}
+
+func (p *Page) SetGroupService(groupService *service.ProxyGroupService) {
+	p.groupService = groupService
+}
+
+func (p *Page) getGroupService() *service.ProxyGroupService {
+	if p.groupService != nil {
+		return p.groupService
+	}
+	return service.NewProxyGroupService(repository.NewLocalYAMLDriver())
 }
 
 func (p *Page) setupUI() {
@@ -119,6 +138,13 @@ func (p *Page) setupUI() {
 	p.groupForm.SetButtonsAlign(tview.AlignCenter)
 	p.groupForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	p.groupForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorBlack))
+	p.groupForm.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			p.onCancelClicked()
+			return nil
+		}
+		return event
+	})
 
 	leftPanel := tview.NewFlex().SetDirection(tview.FlexRow)
 	leftPanel.AddItem(p.groupList, 0, 1, true)
@@ -165,7 +191,7 @@ func (p *Page) setupGroupList() {
 	p.groupList.SetChangedFunc(func(idx int, _, _ string, _ rune) {
 		p.mu.Lock()
 		p.selectedIndex = idx
-		var g *config.ProxyGroupEntry
+		var g *models.ProxyGroupEntry
 		if idx >= 0 && idx < len(p.groups) {
 			g = &p.groups[idx]
 		}
@@ -308,16 +334,15 @@ func (p *Page) onCancelClicked() {
 	p.editingGroup = ""
 	p.mu.Unlock()
 	p.RemoveItem(p.groupForm)
+	ui.Updater.SetFocus(p.groupList)
 }
 
 func (p *Page) saveGroup(name, groupType, filter, testURL string, use, proxies []string, editing string) {
-	var configPath string
 	var err error
-
 	if editing != "" {
-		configPath, err = config.UpdateGroupInConfig(editing, name, groupType, filter, testURL, use, proxies)
+		err = p.getGroupService().UpdateGroup(editing, name, groupType, filter, testURL, use, proxies)
 	} else {
-		configPath, err = config.AddGroupToConfig(name, groupType, filter, testURL, use, proxies)
+		err = p.getGroupService().AddGroup(name, groupType, filter, testURL, use, proxies)
 	}
 
 	if err != nil {
@@ -325,11 +350,7 @@ func (p *Page) saveGroup(name, groupType, filter, testURL string, use, proxies [
 		return
 	}
 
-	if err := api.Client.ReloadConfig(configPath); err != nil {
-		log.Printf("[proxygroups] hot-reload failed: %v", err)
-	}
-
-	groups, err := config.GetAllProxyGroupsFromConfig()
+	groups, err := p.getGroupService().GetGroups()
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("pg.config_read_fail"), err))
 		return
@@ -347,6 +368,7 @@ func (p *Page) saveGroup(name, groupType, filter, testURL string, use, proxies [
 		}
 		p.updateGroupList()
 		p.status.SetText(fmt.Sprintf(i18n.T("pg.save_ok"), name))
+		ui.Updater.SetFocus(p.groupList)
 	})
 }
 
@@ -370,18 +392,14 @@ func (p *Page) deleteSelected() {
 	})
 }
 
-func (p *Page) deleteGroup(g config.ProxyGroupEntry) {
-	configPath, err := config.DeleteGroupFromConfig(g.Name)
+func (p *Page) deleteGroup(g models.ProxyGroupEntry) {
+	err := p.getGroupService().DeleteGroup(g.Name)
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("pg.delete_fail"), err))
 		return
 	}
 
-	if err := api.Client.ReloadConfig(configPath); err != nil {
-		log.Printf("[proxygroups] hot-reload failed: %v", err)
-	}
-
-	groups, err := config.GetAllProxyGroupsFromConfig()
+	groups, err := p.getGroupService().GetGroups()
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("pg.config_read_fail"), err))
 		return
@@ -397,9 +415,16 @@ func (p *Page) deleteGroup(g config.ProxyGroupEntry) {
 }
 
 func (p *Page) refresh() {
-	groups, err := config.GetAllProxyGroupsFromConfig()
+	groups, err := p.getGroupService().GetGroups()
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("pg.config_read_fail"), err))
+		ui.Updater.PostUi(func() {
+			p.mu.Lock()
+			p.groups = nil
+			p.mu.Unlock()
+			p.updateGroupList()
+			p.detailView.SetText("")
+		})
 		return
 	}
 	ui.Updater.PostUi(func() {
@@ -407,6 +432,7 @@ func (p *Page) refresh() {
 		p.groups = groups
 		p.mu.Unlock()
 		p.updateGroupList()
+		p.status.SetText(i18n.T("pg.status_ready"))
 	})
 }
 
@@ -434,7 +460,7 @@ func (p *Page) updateGroupList() {
 }
 
 // showDetail is always called from the UI goroutine (SetChangedFunc, keyboard handler).
-func (p *Page) showDetail(g config.ProxyGroupEntry) {
+func (p *Page) showDetail(g models.ProxyGroupEntry) {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf(i18n.T("pg.detail_name"), ui.StripFlagEmoji(g.Name)))
 	b.WriteString(fmt.Sprintf(i18n.T("pg.detail_type"), g.Type))
@@ -479,4 +505,21 @@ func (p *Page) showError(msg string) {
 
 func (p *Page) showStatus(msg string) {
 	ui.Updater.PostUi(func() { p.status.SetText(msg) })
+}
+
+// UpdateTexts refreshes all localized labels on the proxy groups page
+func (p *Page) UpdateTexts() {
+	ui.Updater.PostUi(func() {
+		p.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.title")))
+		if p.groupList != nil {
+			p.groupList.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.list_title")))
+		}
+		if p.detailView != nil {
+			p.detailView.SetTitle(fmt.Sprintf(" %s ", i18n.T("pg.detail_title")))
+		}
+		if p.status != nil {
+			p.status.SetText(i18n.T("pg.status_ready"))
+		}
+		p.updateGroupList()
+	})
 }

@@ -16,14 +16,13 @@ func init() {
 	ui.InitUpdater(tview.NewApplication())
 }
 
-func TestNewConnections_NonNil(t *testing.T) {
-	c := NewConnections()
+func TestNewConnectionsPage_NonNil(t *testing.T) {
+	c := NewConnectionsPage()
 	if c == nil {
-		t.Fatal("NewConnections() returned nil")
+		t.Fatal("NewConnectionsPage() returned nil")
 	}
-	// NewConnections now returns *ConnectionsPage directly
 	if _, ok := interface{}(c).(ActivatablePage); !ok {
-		t.Fatal("NewConnections() does not implement ActivatablePage")
+		t.Fatal("NewConnectionsPage() does not implement ActivatablePage")
 	}
 }
 
@@ -31,7 +30,7 @@ func TestConnections_ActivateDeactivate_GoroutineLeak(t *testing.T) {
 	// Record baseline goroutine count before creating any pages
 	baseCount := runtime.NumGoroutine()
 
-	c := NewConnections()
+	c := NewConnectionsPage()
 	c.Activate()
 	c.Deactivate()
 
@@ -49,7 +48,7 @@ func TestConnections_ActivateDeactivate_GoroutineLeak(t *testing.T) {
 }
 
 func TestConnections_DeactivateNoPanic(t *testing.T) {
-	c := NewConnections()
+	c := NewConnectionsPage()
 
 	defer func() {
 		if r := recover(); r != nil {

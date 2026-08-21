@@ -29,6 +29,8 @@ type ConnectionsPage struct {
 	connectionsTable *tview.Table
 	statusText       *tview.TextView
 	infoPanel        *tview.TextView
+	searchInput      *tview.InputField
+	filterText       string
 
 	// Data
 	connections    []models.Connection
@@ -63,6 +65,8 @@ func NewConnectionsPage() *ConnectionsPage {
 
 // Activate initializes the page when it becomes active
 func (c *ConnectionsPage) Activate() {
+	c.Deactivate()
+
 	c.mutex.Lock()
 	c.isActive = true
 	c.mutex.Unlock()
@@ -92,12 +96,48 @@ func (c *ConnectionsPage) Deactivate() {
 	c.stopAutoRefresh()
 }
 
+// UpdateTexts refreshes all localized labels and titles on the connections page
+func (c *ConnectionsPage) UpdateTexts() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.mainFlex.SetTitle(fmt.Sprintf(" %s ", i18n.T("conn.title")))
+	if c.searchInput != nil {
+		c.searchInput.SetLabel(" " + i18n.T("rule.search_label"))
+	}
+	if c.connectionsTable != nil {
+		c.connectionsTable.SetTitle(fmt.Sprintf(" %s ", i18n.T("conn.active_conn")))
+		headers := []string{
+			i18n.T("conn.col_id"), i18n.T("conn.col_network"), i18n.T("conn.col_source"),
+			i18n.T("conn.col_dest"), i18n.T("conn.col_chain"), i18n.T("conn.col_rule"),
+			i18n.T("conn.col_upload"), i18n.T("conn.col_download"), i18n.T("conn.col_duration"),
+		}
+		for i, header := range headers {
+			cell := tview.NewTableCell(header).
+				SetTextColor(tcell.ColorGray).
+				SetAlign(tview.AlignCenter).
+				SetSelectable(false)
+			c.connectionsTable.SetCell(0, i, cell)
+		}
+	}
+	if c.infoPanel != nil {
+		c.infoPanel.SetTitle(fmt.Sprintf(" %s ", i18n.T("conn.detail_title")))
+	}
+	c.updateStatus()
+}
+
 // setupLayout sets up the connections page layout
 func (c *ConnectionsPage) setupLayout() {
 	// Create components
+	c.createSearchInput()
 	c.createConnectionsTable()
 	c.createStatusText()
 	c.createInfoPanel()
+
+	// Create left panel (search + table)
+	leftPanel := tview.NewFlex().SetDirection(tview.FlexRow)
+	leftPanel.AddItem(c.searchInput, 1, 0, false)
+	leftPanel.AddItem(c.connectionsTable, 0, 1, true)
 
 	// Create right panel (info panel + status)
 	rightPanel := tview.NewFlex().SetDirection(tview.FlexRow)
@@ -106,13 +146,33 @@ func (c *ConnectionsPage) setupLayout() {
 
 	// Main layout
 	c.mainFlex = tview.NewFlex().SetDirection(tview.FlexRow)
-	c.mainFlex.AddItem(components.NewResponsiveSplit(c.connectionsTable, rightPanel, 110, 3, 2), 0, 1, true)
+	c.mainFlex.AddItem(components.NewResponsiveSplit(leftPanel, rightPanel, 110, 3, 2), 0, 1, true)
 
 	c.mainFlex.SetBorder(false)
 	c.mainFlex.SetTitle(fmt.Sprintf(" %s ", i18n.T("conn.title")))
 
 	c.pages.AddPage("main", c.mainFlex, true, true)
 	c.AddItem(c.pages, 0, 1, true)
+}
+
+func (c *ConnectionsPage) createSearchInput() {
+	c.searchInput = tview.NewInputField().
+		SetLabel(" " + i18n.T("rule.search_label")).
+		SetFieldWidth(0)
+	c.searchInput.SetFieldBackgroundColor(ui.ThemeInputBg)
+	c.searchInput.SetChangedFunc(func(text string) {
+		c.mutex.Lock()
+		c.filterText = strings.TrimSpace(text)
+		c.mutex.Unlock()
+		c.updateConnectionsTable()
+	})
+	c.searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape || event.Key() == tcell.KeyEnter {
+			ui.Updater.SetFocus(c.connectionsTable)
+			return nil
+		}
+		return event
+	})
 }
 
 // createConnectionsTable creates the connections table
@@ -179,15 +239,21 @@ func (c *ConnectionsPage) setupEventHandlers() {
 		case tcell.KeyDelete:
 			c.closeSelectedConnection()
 			return nil
-		case tcell.KeyF5:
+		case tcell.KeyF5, tcell.KeyCtrlR:
 			c.refresh()
 			return nil
-		case tcell.KeyCtrlR:
-			c.refresh()
+		case tcell.KeyCtrlX:
+			c.confirmCloseAllConnections()
 			return nil
 		}
 
 		switch event.Rune() {
+		case '/':
+			ui.Updater.SetFocus(c.searchInput)
+			return nil
+		case 'x', 'X':
+			c.confirmCloseAllConnections()
+			return nil
 		case 'd', 'D':
 			c.closeSelectedConnection()
 			return nil
@@ -200,6 +266,31 @@ func (c *ConnectionsPage) setupEventHandlers() {
 		}
 
 		return event
+	})
+}
+
+func (c *ConnectionsPage) confirmCloseAllConnections() {
+	ui.Updater.ShowConfirm(i18n.T("conn.title"), i18n.T("conn.close_all_confirm"), func() {
+		go c.closeAllConnections()
+	})
+}
+
+func (c *ConnectionsPage) closeAllConnections() {
+	c.mutex.RLock()
+	conns := make([]models.Connection, len(c.connections))
+	copy(conns, c.connections)
+	c.mutex.RUnlock()
+
+	closed := 0
+	for _, conn := range conns {
+		if err := api.Client.CloseConnection(conn.ID); err == nil {
+			closed++
+		}
+	}
+
+	ui.Updater.PostUi(func() {
+		c.statusText.SetText(fmt.Sprintf("[green]"+i18n.T("conn.close_all_done")+"[white]", closed))
+		c.refresh()
 	})
 }
 
@@ -235,7 +326,17 @@ func (c *ConnectionsPage) loadConnectionsData() {
 // updateConnectionsTable updates the connections table
 func (c *ConnectionsPage) updateConnectionsTable() {
 	c.mutex.RLock()
-	connections := c.connections
+	var connections []models.Connection
+	filter := strings.ToLower(c.filterText)
+	for _, conn := range c.connections {
+		if filter != "" {
+			target := strings.ToLower(conn.Metadata.Host + " " + conn.Metadata.DestinationIP + " " + conn.Rule + " " + strings.Join(conn.Chains, " ") + " " + conn.Metadata.ProcessPath)
+			if !strings.Contains(target, filter) {
+				continue
+			}
+		}
+		connections = append(connections, conn)
+	}
 	c.mutex.RUnlock()
 
 	rowCount := c.connectionsTable.GetRowCount()
@@ -517,9 +618,7 @@ func (c *ConnectionsPage) updateStatus() {
 		refreshCount,
 	)
 
-	ui.Updater.PostUi(func() {
-		c.statusText.SetText(status)
-	})
+	c.statusText.SetText(status)
 }
 
 // closeSelectedConnection closes the selected connection
@@ -608,17 +707,16 @@ func (c *ConnectionsPage) startAutoRefresh() {
 	c.stopAutoRefresh() // Stop existing refresh if any
 
 	c.mutex.Lock()
-	isActive := c.isActive
-	c.mutex.Unlock()
-
-	if !isActive {
-		return // Page is not active
+	if !c.isActive || !c.autoRefresh {
+		c.mutex.Unlock()
+		return
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	c.refreshCancel = cancel
 	ticker := time.NewTicker(2 * time.Second) // Refresh every 2 seconds
 	c.refreshTicker = ticker
+	c.mutex.Unlock()
 
 	go func() {
 		defer ticker.Stop()
@@ -633,11 +731,14 @@ func (c *ConnectionsPage) startAutoRefresh() {
 				autoRefresh := c.autoRefresh
 				c.mutex.RUnlock()
 
-				if !isActive || !autoRefresh {
+				if !isActive || !autoRefresh || ctx.Err() != nil {
 					return
 				}
 
 				c.loadConnectionsData()
+				if ctx.Err() != nil {
+					return
+				}
 				ui.Updater.PostUi(func() {
 					c.updateConnectionsTable()
 				})
@@ -648,6 +749,8 @@ func (c *ConnectionsPage) startAutoRefresh() {
 
 // stopAutoRefresh stops the auto-refresh goroutine
 func (c *ConnectionsPage) stopAutoRefresh() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	if c.refreshCancel != nil {
 		c.refreshCancel()
 		c.refreshCancel = nil
@@ -656,6 +759,11 @@ func (c *ConnectionsPage) stopAutoRefresh() {
 		c.refreshTicker.Stop()
 		c.refreshTicker = nil
 	}
+}
+
+// Stop stops the connections page
+func (c *ConnectionsPage) Stop() {
+	c.Deactivate()
 }
 
 // showError shows an error message in the status area

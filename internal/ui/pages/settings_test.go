@@ -4,17 +4,20 @@ import (
 	"testing"
 
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/events"
 )
 
 func TestNewSettings_NonNil(t *testing.T) {
-	s := newSettingsPage(config.NewManager(), "test", "1.0")
+	bus := events.NewBus()
+	s := newSettingsPage(config.NewManager(), "test", "1.0", bus)
 	if s == nil {
-		t.Fatal("newSettingsPage(config.NewManager(), \"test\", \"1.0\") returned nil")
+		t.Fatal("newSettingsPage(config.NewManager(), \"test\", \"1.0\", bus) returned nil")
 	}
 }
 
 func TestSettings_BasicLayout(t *testing.T) {
-	s := newSettingsPage(config.NewManager(), "test", "1.0")
+	bus := events.NewBus()
+	s := newSettingsPage(config.NewManager(), "test", "1.0", bus)
 	if s == nil {
 		t.Fatal("newSettingsPage returned nil")
 	}

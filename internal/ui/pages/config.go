@@ -1,9 +1,11 @@
 package pages
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strconv"
+	"sync"
 
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
@@ -35,6 +37,10 @@ type ConfigPage struct {
 	// Current config values
 	currentConfig *config.AppConfig
 	mihomoConfig  *models.Config
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	mu     sync.Mutex
 }
 
 // NewConfigPage creates a new configuration page
@@ -134,6 +140,15 @@ func (c *ConfigPage) setUpFormItems() {
 // Runs on the page-lifecycle goroutine; all widget mutations must be
 // marshalled onto the tview UI goroutine via PostUi.
 func (c *ConfigPage) Activate() {
+	c.mu.Lock()
+	if c.cancel != nil {
+		c.cancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	c.ctx = ctx
+	c.cancel = cancel
+	c.mu.Unlock()
+
 	ui.Updater.PostUi(func() {
 		c.setStatus(i18n.T("cfg.saving"))
 		// Load local config immediately
@@ -142,7 +157,17 @@ func (c *ConfigPage) Activate() {
 
 	// Fetch remote port config in background
 	go func() {
-		config, err := api.Client.GetConfig()
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		config, err := api.Client.GetConfigWithContext(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		if err != nil {
 			log.Printf("failed to fetch mihomo config for ports: %v", err)
 			ui.Updater.PostUi(func() {
@@ -150,7 +175,9 @@ func (c *ConfigPage) Activate() {
 			})
 			return
 		}
+		c.mu.Lock()
 		c.mihomoConfig = config
+		c.mu.Unlock()
 		ui.Updater.PostUi(func() {
 			c.updatePortFields()
 			c.setStatus(i18n.T("cfg.loaded"))
@@ -160,6 +187,12 @@ func (c *ConfigPage) Activate() {
 
 // Deactivate deactivates the config page
 func (c *ConfigPage) Deactivate() {
+	c.mu.Lock()
+	if c.cancel != nil {
+		c.cancel()
+		c.cancel = nil
+	}
+	c.mu.Unlock()
 }
 
 // updateConfigForm loads current configuration into form fields
@@ -303,4 +336,37 @@ func (c *ConfigPage) setStatus(message string) {
 // showStatus displays a status message (alias for setStatus)
 func (c *ConfigPage) showStatus(message string) {
 	c.setStatus(message)
+}
+
+// UpdateTexts refreshes localized labels on the app config form
+func (c *ConfigPage) UpdateTexts() {
+	ui.Updater.PostUi(func() {
+		if c.form != nil {
+			c.form.SetTitle(fmt.Sprintf(" %s ", i18n.T("cfg.title")))
+		}
+		if c.apiAddrField != nil {
+			c.apiAddrField.SetLabel(i18n.T("cfg.api_address"))
+		}
+		if c.apiSecretField != nil {
+			c.apiSecretField.SetLabel(i18n.T("cfg.api_secret"))
+		}
+		if c.httpPortField != nil {
+			c.httpPortField.SetLabel(i18n.T("cfg.http_port"))
+		}
+		if c.socksPortField != nil {
+			c.socksPortField.SetLabel(i18n.T("cfg.socks_port"))
+		}
+		if c.mixedPortField != nil {
+			c.mixedPortField.SetLabel(i18n.T("cfg.mixed_port"))
+		}
+		if saveBtn := c.form.GetButton(0); saveBtn != nil {
+			saveBtn.SetLabel(i18n.T("cfg.save"))
+		}
+		if resetBtn := c.form.GetButton(1); resetBtn != nil {
+			resetBtn.SetLabel(i18n.T("cfg.reset"))
+		}
+		if testBtn := c.form.GetButton(2); testBtn != nil {
+			testBtn.SetLabel(i18n.T("cfg.test_btn"))
+		}
+	})
 }

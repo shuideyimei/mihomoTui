@@ -7,10 +7,9 @@ import (
 	"strings"
 	"sync"
 
-	"mihomoTui/internal/api"
-	"mihomoTui/internal/config"
 	"mihomoTui/internal/i18n"
-	"mihomoTui/internal/subscription"
+	"mihomoTui/internal/models"
+	"mihomoTui/internal/service"
 	"mihomoTui/internal/ui"
 	"mihomoTui/internal/ui/components"
 
@@ -21,8 +20,8 @@ import (
 type Page struct {
 	*tview.Flex
 
-	subMgr    *subscription.Manager
-	providers []config.ProviderInfo
+	providerService *service.ProviderService
+	providers       []models.ProviderInfo
 
 	subList    *tview.List
 	detailView *tview.TextView
@@ -44,11 +43,11 @@ type Page struct {
 	cancel context.CancelFunc
 }
 
-func NewPage(subMgr *subscription.Manager) *Page {
+func NewPage(providerService *service.ProviderService) *Page {
 	page := &Page{
-		Flex:          tview.NewFlex(),
-		subMgr:        subMgr,
-		selectedIndex: -1,
+		Flex:            tview.NewFlex(),
+		providerService: providerService,
+		selectedIndex:   -1,
 	}
 	page.setupUI()
 	return page
@@ -153,7 +152,7 @@ func (p *Page) setupSubList() {
 	p.subList.SetChangedFunc(func(idx int, _, _ string, _ rune) {
 		p.mu.Lock()
 		p.selectedIndex = idx
-		var pv *config.ProviderInfo
+		var pv *models.ProviderInfo
 		if idx >= 0 && idx < len(p.providers) {
 			pv = &p.providers[idx]
 		}
@@ -257,24 +256,19 @@ func (p *Page) onCancelImport() {
 }
 
 func (p *Page) importFromURL(name, subURL string) {
-	doc, err := p.subMgr.ImportFromURL(p.downloadCtx(), subURL)
+	if p.providerService == nil {
+		p.showError("provider service not available")
+		return
+	}
+	doc, err := p.providerService.ImportURL(p.downloadCtx(), name, subURL)
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("sub.import_fail"), err))
 		return
 	}
 
-	configPath, cfgErr := config.AddProviderToConfig(name, subURL)
-	if cfgErr != nil {
-		p.showError(fmt.Sprintf(i18n.T("sub.config_write_fail"), cfgErr))
-		return
-	}
-	if err := api.Client.ReloadConfig(configPath); err != nil {
-		log.Printf("[subs] hot-reload failed (will auto-load): %v", err)
-	}
-
 	log.Printf("[subs] imported %d proxies to mihomo as %s", len(doc.Proxies), name)
 
-	providers, err := config.GetMihomoProxyProviders()
+	providers, err := p.providerService.GetProxyProviders()
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("sub.config_read_fail"), err))
 		return
@@ -298,7 +292,11 @@ func (p *Page) importFromURL(name, subURL string) {
 }
 
 func (p *Page) importFromLocal(name, path string) {
-	doc, err := p.subMgr.ImportFromLocal(path)
+	if p.providerService == nil {
+		p.showError("provider service not available")
+		return
+	}
+	doc, err := p.providerService.ImportLocal(name, path)
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("sub.import_fail"), err))
 		return
@@ -306,8 +304,15 @@ func (p *Page) importFromLocal(name, path string) {
 
 	log.Printf("[subs] parsed %d proxies from %s", len(doc.Proxies), name)
 
+	providers, err := p.providerService.GetProxyProviders()
+	if err != nil {
+		p.showError(fmt.Sprintf(i18n.T("sub.config_read_fail"), err))
+		return
+	}
+
 	ui.Updater.PostUi(func() {
 		p.mu.Lock()
+		p.providers = providers
 		formWasShown := p.showInput
 		p.showInput = false
 		p.mu.Unlock()
@@ -317,6 +322,7 @@ func (p *Page) importFromLocal(name, path string) {
 		p.nameInput.SetText("")
 		p.urlInput.SetText("")
 		p.intervalInput.SetText("1440")
+		p.updateSubList()
 		p.status.SetText(fmt.Sprintf(i18n.T("sub.import_ok_local"), name, len(doc.Proxies)))
 	})
 }
@@ -338,19 +344,18 @@ func (p *Page) updateSelected() {
 
 	p.showStatus(fmt.Sprintf(i18n.T("sub.updating"), pv.Name))
 
-	doc, err := p.subMgr.ImportFromURL(p.downloadCtx(), pv.URL)
+	if p.providerService == nil {
+		p.showError("provider service not available")
+		return
+	}
+
+	doc, err := p.providerService.ImportURL(p.downloadCtx(), pv.Name, pv.URL)
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("sub.update_fail"), err))
 		return
 	}
 
-	_, cfgErr := config.AddProviderToConfig(pv.Name, pv.URL)
-	if cfgErr != nil {
-		p.showError(fmt.Sprintf(i18n.T("sub.config_write_fail"), cfgErr))
-		return
-	}
-
-	providers, err := config.GetMihomoProxyProviders()
+	providers, err := p.providerService.GetProxyProviders()
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("sub.config_read_fail"), err))
 		return
@@ -380,18 +385,17 @@ func (p *Page) deleteSelected() {
 	})
 }
 
-func (p *Page) deleteProvider(pv config.ProviderInfo) {
-	if err := config.RemoveProviderFromConfig(pv.Name); err != nil {
+func (p *Page) deleteProvider(pv models.ProviderInfo) {
+	if p.providerService == nil {
+		p.showError("provider service not available")
+		return
+	}
+	if err := p.providerService.RemoveProxyProvider(pv.Name); err != nil {
 		p.showError(fmt.Sprintf(i18n.T("sub.delete_fail"), err))
 		return
 	}
 
-	configPath := config.FindMihomoConfigPath()
-	if configPath != "" {
-		api.Client.ReloadConfig(configPath)
-	}
-
-	providers, err := config.GetMihomoProxyProviders()
+	providers, err := p.providerService.GetProxyProviders()
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("sub.config_read_fail"), err))
 		return
@@ -407,7 +411,10 @@ func (p *Page) deleteProvider(pv config.ProviderInfo) {
 }
 
 func (p *Page) refresh() {
-	providers, err := config.GetMihomoProxyProviders()
+	if p.providerService == nil {
+		return
+	}
+	providers, err := p.providerService.GetProxyProviders()
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("sub.config_read_fail"), err))
 		return
@@ -443,7 +450,7 @@ func (p *Page) updateSubList() {
 	}
 }
 
-func (p *Page) showDetail(pv config.ProviderInfo) {
+func (p *Page) showDetail(pv models.ProviderInfo) {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf(i18n.T("sub.detail_name"), ui.StripFlagEmoji(pv.Name)))
 	b.WriteString(fmt.Sprintf("[yellow]URL:[white] %s\n", pv.URL))
@@ -468,4 +475,21 @@ func (p *Page) showError(msg string) {
 
 func (p *Page) showStatus(msg string) {
 	ui.Updater.PostUi(func() { p.status.SetText(msg) })
+}
+
+// UpdateTexts refreshes all localized labels on the subscriptions page
+func (p *Page) UpdateTexts() {
+	ui.Updater.PostUi(func() {
+		p.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.title")))
+		if p.subList != nil {
+			p.subList.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.mihomo_providers")))
+		}
+		if p.detailView != nil {
+			p.detailView.SetTitle(fmt.Sprintf(" %s ", i18n.T("sub.detail_title")))
+		}
+		if p.status != nil {
+			p.status.SetText(i18n.T("sub.status_ready"))
+		}
+		p.updateSubList()
+	})
 }

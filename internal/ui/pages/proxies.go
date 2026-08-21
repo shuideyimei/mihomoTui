@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"mihomoTui/internal/api"
+	"mihomoTui/internal/events"
 	"mihomoTui/internal/i18n"
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
@@ -37,6 +38,9 @@ type ProxiesPage struct {
 	ruleBtn   *tview.Button
 	globalBtn *tview.Button
 	directBtn *tview.Button
+
+	bus       *events.Bus
+	modeUnsub func()
 
 	// Data
 	providersData map[string]*models.ProxyProvider
@@ -69,12 +73,15 @@ type ProxiesPage struct {
 }
 
 // NewProxiesPage creates a new proxies management page
-func NewProxiesPage() *ProxiesPage {
+func NewProxiesPage(bus ...*events.Bus) *ProxiesPage {
 	page := &ProxiesPage{
 		Flex:          tview.NewFlex(),
 		providersData: make(map[string]*models.ProxyProvider),
 		proxiesData:   make(map[string]*models.Proxy),
 		currentMode:   "rule", // Default mode
+	}
+	if len(bus) > 0 && bus[0] != nil {
+		page.bus = bus[0]
 	}
 
 	page.setupLayout()
@@ -83,32 +90,69 @@ func NewProxiesPage() *ProxiesPage {
 	return page
 }
 
+// SetBus sets the event bus instance for the proxies page
+func (p *ProxiesPage) SetBus(bus *events.Bus) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.bus = bus
+}
+
 // Activate initializes the page when it becomes active
 func (p *ProxiesPage) Activate() {
+	p.Deactivate()
+
 	p.mutex.Lock()
 	p.isActive = true
+	bus := p.bus
+	if p.modeUnsub != nil {
+		p.modeUnsub()
+		p.modeUnsub = nil
+	}
+	if bus != nil {
+		p.modeUnsub = bus.Subscribe(events.TopicProxyModeChanged, func(ev interface{}) {
+			if event, ok := ev.(events.ProxyModeChangedEvent); ok {
+				p.mutex.Lock()
+				p.currentMode = strings.ToLower(event.Mode)
+				p.mutex.Unlock()
+				ui.Updater.PostUi(func() {
+					p.updateButtonStyles()
+				})
+			}
+		})
+	}
 	p.mutex.Unlock()
 
-	// Load data and start auto-refresh in background
+	// Start auto-refresh
+	p.startAutoRefresh()
+
+	// Load data in background controlled by autoRefreshCtx
+	p.mutex.RLock()
+	ctx := p.autoRefreshCtx
+	p.mutex.RUnlock()
+
 	go func() {
 		p.loadProvidersData()
+		p.mutex.RLock()
+		active := p.isActive
+		p.mutex.RUnlock()
+		if !active || (ctx != nil && ctx.Err() != nil) {
+			return
+		}
 		ui.Updater.PostUi(func() {
 			p.updateGroupsList()
 			p.statusText.SetText(i18n.T("proxy.loaded"))
 		})
 	}()
-
-	// Start auto-refresh
-	p.startAutoRefresh()
-
-	// Sync mode state from StatusBar
-	go p.syncModeFromStatusBar()
 }
 
 // Deactivate deactivates the proxies page
 func (p *ProxiesPage) Deactivate() {
 	p.mutex.Lock()
 	p.isActive = false
+	if p.modeUnsub != nil {
+		p.modeUnsub()
+		p.modeUnsub = nil
+	}
 	p.mutex.Unlock()
 
 	// Stop auto-refresh
@@ -117,7 +161,39 @@ func (p *ProxiesPage) Deactivate() {
 	// Cancel any ongoing operations
 	if p.cancel != nil {
 		p.cancel()
+		p.cancel = nil
 	}
+}
+
+// UpdateTexts refreshes all localized labels on the proxies page
+func (p *ProxiesPage) UpdateTexts() {
+	ui.Updater.PostUi(func() {
+		p.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.title")))
+		if p.statusText != nil {
+			p.statusText.SetText(i18n.T("proxy.loaded"))
+		}
+		if p.searchInput != nil {
+			p.searchInput.SetLabel(i18n.T("proxy.search"))
+			p.searchInput.SetPlaceholder(i18n.T("proxy.search_placeholder"))
+		}
+		if p.groupsList != nil {
+			p.groupsList.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.group_select")))
+		}
+		if p.nodesList != nil {
+			p.nodesList.SetTitle(fmt.Sprintf(" %s ", i18n.T("proxy.nodes_select")))
+		}
+		if p.ruleBtn != nil {
+			p.ruleBtn.SetLabel(i18n.T("proxy.mode_rule"))
+		}
+		if p.globalBtn != nil {
+			p.globalBtn.SetLabel(i18n.T("proxy.mode_global"))
+		}
+		if p.directBtn != nil {
+			p.directBtn.SetLabel(i18n.T("proxy.mode_direct"))
+		}
+		p.updateGroupsList()
+		p.updateNodesListContent()
+	})
 }
 
 // setupLayout sets up the proxies page layout
@@ -246,12 +322,16 @@ func (p *ProxiesPage) createSwitchButtons() {
 
 // updateButtonStyles updates button labels based on current mode
 func (p *ProxiesPage) updateButtonStyles() {
+	p.mutex.RLock()
+	mode := p.currentMode
+	p.mutex.RUnlock()
+
 	// Use plain text with ▶ indicator on active mode
 	rLabel := i18n.T("proxy.mode_rule")
 	gLabel := i18n.T("proxy.mode_global")
 	dLabel := i18n.T("proxy.mode_direct")
 
-	switch p.currentMode {
+	switch mode {
 	case "rule":
 		rLabel = "▶ Rule"
 	case "global":
@@ -263,28 +343,6 @@ func (p *ProxiesPage) updateButtonStyles() {
 	p.ruleBtn.SetLabel(rLabel)
 	p.globalBtn.SetLabel(gLabel)
 	p.directBtn.SetLabel(dLabel)
-}
-
-// syncModeFromStatusBar synchronizes mode state from StatusBar
-func (p *ProxiesPage) syncModeFromStatusBar() {
-	currentMode := ui.Updater.GetCurrentMode()
-	if currentMode != "" && currentMode != "Unknown" {
-		// Convert mode to lowercase to match our internal format
-		switch currentMode {
-		case "Rule":
-			p.currentMode = "rule"
-		case "Global":
-			p.currentMode = "global"
-		case "Direct":
-			p.currentMode = "direct"
-		default:
-			p.currentMode = strings.ToLower(currentMode)
-		}
-		// Update button highlights
-		ui.Updater.PostUi(func() {
-			p.updateButtonStyles()
-		})
-	}
 }
 
 // createNodesList creates the proxy nodes table
@@ -815,9 +873,8 @@ func (p *ProxiesPage) switchMode(mode string) {
 	p.showInfo(fmt.Sprintf(i18n.T("proxy.switching_mode"), mode))
 
 	go func() {
-		// Get current config
-		config, err := api.Client.GetConfig()
-		if err != nil {
+		// Verify client connectivity by getting config
+		if _, err := api.Client.GetConfig(); err != nil {
 			p.showError(fmt.Sprintf(i18n.T("proxy.fetch_fail"), err))
 			return
 		}
@@ -825,18 +882,24 @@ func (p *ProxiesPage) switchMode(mode string) {
 		patch := map[string]interface{}{
 			"mode": mode,
 		}
-		err = api.Client.PatchConfig(patch)
+		err := api.Client.PatchConfig(patch)
 		if err != nil {
 			p.showError(fmt.Sprintf(i18n.T("proxy.mode_switch_fail"), err))
 			return
 		}
 
 		// Update local state
+		p.mutex.Lock()
 		p.currentMode = mode
-		config.Mode = mode // Apply to local copy for UI update
+		bus := p.bus
+		p.mutex.Unlock()
 
-		// Update StatusBar with new config
-		ui.Updater.UpdateStatusBarConfig(config)
+		// Publish mode change event
+		if bus != nil {
+			bus.Publish(events.TopicProxyModeChanged, events.ProxyModeChangedEvent{
+				Mode: mode,
+			})
+		}
 
 		// Update button colors
 		ui.Updater.PostUi(func() {
@@ -1004,11 +1067,18 @@ func (p *ProxiesPage) Refresh() {
 
 // startAutoRefresh starts periodic data refresh every 10 seconds
 func (p *ProxiesPage) startAutoRefresh() {
-	if p.autoRefreshStop != nil {
-		p.autoRefreshStop() // Stop existing refresh first
+	p.stopAutoRefresh() // Stop existing refresh first
+
+	p.mutex.Lock()
+	if !p.isActive {
+		p.mutex.Unlock()
+		return
 	}
 
-	p.autoRefreshCtx, p.autoRefreshStop = context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	p.autoRefreshCtx = ctx
+	p.autoRefreshStop = cancel
+	p.mutex.Unlock()
 
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
@@ -1016,18 +1086,25 @@ func (p *ProxiesPage) startAutoRefresh() {
 
 		for {
 			select {
-			case <-p.autoRefreshCtx.Done():
+			case <-ctx.Done():
 				return
 			case <-ticker.C:
 				p.mutex.RLock()
 				active := p.isActive
 				p.mutex.RUnlock()
-				if !active {
+				if !active || ctx.Err() != nil {
 					return
 				}
 
 				// Reload provider data silently
 				p.loadProvidersData()
+
+				p.mutex.RLock()
+				active = p.isActive
+				p.mutex.RUnlock()
+				if !active || ctx.Err() != nil {
+					return
+				}
 
 				// Update UI with new data
 				ui.Updater.PostUi(func() {
@@ -1043,6 +1120,8 @@ func (p *ProxiesPage) startAutoRefresh() {
 
 // stopAutoRefresh stops the periodic refresh
 func (p *ProxiesPage) stopAutoRefresh() {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
 	if p.autoRefreshStop != nil {
 		p.autoRefreshStop()
 		p.autoRefreshStop = nil
@@ -1051,9 +1130,7 @@ func (p *ProxiesPage) stopAutoRefresh() {
 
 // Stop stops all background processes
 func (p *ProxiesPage) Stop() {
-	if p.cancel != nil {
-		p.cancel()
-	}
+	p.Deactivate()
 }
 
 // showError shows an error message
@@ -1113,14 +1190,15 @@ func (p *ProxiesPage) initializeNavigation() {
 	p.focusableComponents = []tview.Primitive{p.groupsList, p.switchButtons, p.searchInput, p.nodesList}
 	p.currentFocusIndex = 0
 	p.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyTAB:
-			p.switchToNextComponent()
-			return nil
-		case tcell.KeyBacktab:
+		if event.Key() == tcell.KeyBacktab || (event.Key() == tcell.KeyTAB && event.Modifiers()&tcell.ModShift != 0) {
 			p.switchToPrevComponent()
 			return nil
-		case tcell.KeyCtrlR:
+		}
+		if event.Key() == tcell.KeyTAB {
+			p.switchToNextComponent()
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlR {
 			p.Refresh()
 			return nil
 		}

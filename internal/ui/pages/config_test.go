@@ -41,14 +41,6 @@ func TestNewConfigPage_NonNil(t *testing.T) {
 	}
 }
 
-func TestNewConfig_NonNil(t *testing.T) {
-	cfg := config.NewManager()
-	page := NewConfig(cfg)
-	if page == nil {
-		t.Fatal("NewConfig(config.NewManager()) returned nil")
-	}
-}
-
 func TestConfigPage_FormInputFields(t *testing.T) {
 	cfg := config.NewManager()
 	page := NewConfigPage(cfg)
@@ -112,7 +104,7 @@ func TestConfigPage_FormButtons(t *testing.T) {
 
 func TestConfigPage_ActivateDoesNotPanic(t *testing.T) {
 	cfg := config.NewManager()
-	page := NewConfig(cfg)
+	page := NewConfigPage(cfg)
 
 	done := make(chan struct{})
 	go func() {
@@ -147,7 +139,7 @@ func TestConfigPage_DeactivateDoesNotPanic(t *testing.T) {
 
 func TestConfigPage_GoroutineLeak(t *testing.T) {
 	cfg := config.NewManager()
-	page := NewConfig(cfg)
+	page := NewConfigPage(cfg)
 
 	before := runtime.NumGoroutine()
 

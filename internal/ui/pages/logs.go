@@ -31,7 +31,7 @@ type LogsPage struct {
 	levelFilter   string
 	isPaused      bool
 	searchText    string
-	renderPending bool
+	renderTimer   *time.Timer
 	searchInput   *tview.InputField
 	pauseBtn      *tview.Button
 	levelDropdown *tview.DropDown
@@ -69,22 +69,6 @@ func NewLogsPage() *LogsPage {
 func (p *LogsPage) setupUI() {
 	p.textView.SetDynamicColors(true)
 	p.textView.SetScrollable(true)
-
-	// Only auto-scroll when not paused
-	p.textView.SetChangedFunc(func() {
-		p.mu.Lock()
-		paused := p.isPaused
-		p.mu.Unlock()
-		if paused {
-			return
-		}
-		go func() {
-			time.Sleep(10 * time.Millisecond)
-			ui.Updater.PostUi(func() {
-				p.textView.ScrollToEnd()
-			})
-		}()
-	})
 
 	options := logLevelOptions()
 	displayOpts := make([]string, len(options))
@@ -204,6 +188,12 @@ func (p *LogsPage) togglePause() {
 			p.cancel()
 		}
 		p.ctx, p.cancel = context.WithCancel(context.Background())
+	} else {
+		// Pausing: cancel the active stream context immediately.
+		if p.cancel != nil {
+			p.cancel()
+			p.cancel = nil
+		}
 	}
 	p.mu.Unlock()
 
@@ -223,6 +213,10 @@ func (p *LogsPage) startLogStream() {
 			level := p.levelFilter
 			p.mu.Unlock()
 
+			if ctx == nil || ctx.Err() != nil {
+				return
+			}
+
 			select {
 			case <-ctx.Done():
 				return
@@ -235,12 +229,17 @@ func (p *LogsPage) startLogStream() {
 			} else {
 				err = api.StreamClient.StreamLogsWithLevel(ctx, level, p.onLogReceived)
 			}
+
+			if ctx.Err() != nil {
+				return
+			}
+
 			if err != nil && err != context.Canceled {
 				p.addLog(fmt.Sprintf(i18n.T("log.conn_err"), err))
 				select {
 				case <-ctx.Done():
 					return
-				case <-time.After(5 * time.Second):
+				case <-time.After(1 * time.Second):
 				}
 			}
 
@@ -293,22 +292,20 @@ func (p *LogsPage) formatLog(log *models.Log) string {
 
 func (p *LogsPage) addLog(logText string) {
 	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	p.logs = append(p.logs, logText)
 	if len(p.logs) > p.maxLines {
 		p.logs = p.logs[len(p.logs)-p.maxLines:]
 	}
-	schedule := !p.renderPending
-	p.renderPending = true
-	p.mu.Unlock()
 
-	if schedule {
-		go func() {
-			time.Sleep(50 * time.Millisecond)
+	if p.renderTimer == nil {
+		p.renderTimer = time.AfterFunc(50*time.Millisecond, func() {
 			p.mu.Lock()
-			p.renderPending = false
+			p.renderTimer = nil
 			p.mu.Unlock()
 			p.refreshDisplay()
-		}()
+		})
 	}
 }
 
@@ -328,6 +325,12 @@ func (p *LogsPage) refreshDisplay() {
 		content := b.String()
 		ui.Updater.PostUi(func() {
 			p.textView.SetText(content)
+			p.mu.Lock()
+			paused := p.isPaused
+			p.mu.Unlock()
+			if !paused {
+				p.textView.ScrollToEnd()
+			}
 		})
 		return
 	}
@@ -343,19 +346,25 @@ func (p *LogsPage) refreshDisplay() {
 	content := b.String()
 	ui.Updater.PostUi(func() {
 		p.textView.SetText(content)
+		p.mu.Lock()
+		paused := p.isPaused
+		p.mu.Unlock()
+		if !paused {
+			p.textView.ScrollToEnd()
+		}
 	})
 }
 
 func (p *LogsPage) Stop() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.cancel != nil {
-		p.cancel()
-	}
+	p.Deactivate()
 }
 
 func (p *LogsPage) Activate() {
 	p.mu.Lock()
+	if p.cancel != nil {
+		p.cancel()
+		p.cancel = nil
+	}
 	wasPaused := p.isPaused
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 	p.mu.Unlock()
@@ -371,8 +380,37 @@ func (p *LogsPage) Deactivate() {
 	p.mu.Lock()
 	if p.cancel != nil {
 		p.cancel()
+		p.cancel = nil
+	}
+	if p.renderTimer != nil {
+		p.renderTimer.Stop()
+		p.renderTimer = nil
 	}
 	p.mu.Unlock()
+}
+
+// UpdateTexts refreshes all localized labels on the logs page
+func (p *LogsPage) UpdateTexts() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.SetTitle(fmt.Sprintf(" %s ", i18n.T("log.title")))
+	if p.levelDropdown != nil {
+		p.levelDropdown.SetLabel(i18n.T("log.level_label"))
+	}
+	if p.searchInput != nil {
+		p.searchInput.SetLabel(i18n.T("log.search_label"))
+	}
+	if p.pauseBtn != nil {
+		if p.isPaused {
+			p.pauseBtn.SetLabel(i18n.T("log.resume"))
+		} else {
+			p.pauseBtn.SetLabel(i18n.T("log.pause"))
+		}
+	}
+	if p.clearBtn != nil {
+		p.clearBtn.SetLabel(i18n.T("log.clear"))
+	}
 }
 
 func (p *LogsPage) Clear() {

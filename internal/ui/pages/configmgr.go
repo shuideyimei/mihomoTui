@@ -9,7 +9,9 @@ import (
 
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/events"
 	"mihomoTui/internal/i18n"
+	"mihomoTui/internal/service"
 	"mihomoTui/internal/ui"
 	"mihomoTui/internal/ui/components"
 
@@ -21,27 +23,31 @@ import (
 type ConfigManager struct {
 	*tview.Flex
 
-	pages         *tview.Pages
-	mu            sync.Mutex
-	configList    *tview.List
-	editArea      *tview.TextArea
-	statusText    *tview.TextView
-	files         []string
-	currentConfig string
-	selectedIdx   int
-	editMode      bool
-	editFlex      *tview.Flex // saved reference for AddPage/RemovePage
-	editPath      string
-	editOriginal  string
-	editDirty     bool
+	pages          *tview.Pages
+	profileService *service.ProfileService
+	bus            *events.Bus
+	mu             sync.Mutex
+	configList     *tview.List
+	editArea       *tview.TextArea
+	statusText     *tview.TextView
+	files          []string
+	currentConfig  string
+	selectedIdx    int
+	editMode       bool
+	editFlex       *tview.Flex // saved reference for AddPage/RemovePage
+	editPath       string
+	editOriginal   string
+	editDirty      bool
 }
 
-func newConfigManagerPage() *ConfigManager {
+func newConfigManagerPage(profileService *service.ProfileService, bus *events.Bus) *ConfigManager {
 	cm := &ConfigManager{
-		Flex:          tview.NewFlex(),
-		pages:         tview.NewPages(),
-		selectedIdx:   -1,
-		currentConfig: config.FindCurrentConfigPath(),
+		Flex:           tview.NewFlex(),
+		pages:          tview.NewPages(),
+		profileService: profileService,
+		bus:            bus,
+		selectedIdx:    -1,
+		currentConfig:  config.FindCurrentConfigPath(),
 	}
 	cm.setupUI()
 	return cm
@@ -57,6 +63,9 @@ func (cm *ConfigManager) setupUI() {
 	cm.configList.SetTitle(fmt.Sprintf(" %s ", i18n.T("cmgr.file_list")))
 	components.StyleSelectableList(cm.configList)
 	cm.configList.SetInputCapture(cm.handleConfigListInput)
+	cm.configList.SetSelectedFunc(func(_ int, _ string, _ string, _ rune) {
+		cm.activateSelectedConfig()
+	})
 	cm.configList.SetChangedFunc(func(idx int, _ string, _ string, _ rune) {
 		cm.selectedIdx = idx
 	})
@@ -138,6 +147,9 @@ func (cm *ConfigManager) setupUI() {
 
 func (cm *ConfigManager) handleConfigListInput(event *tcell.EventKey) *tcell.EventKey {
 	switch event.Key() {
+	case tcell.KeyEnter:
+		cm.activateSelectedConfig()
+		return nil
 	case tcell.KeyRune:
 		switch event.Rune() {
 		case 'e', 'E':
@@ -152,6 +164,42 @@ func (cm *ConfigManager) handleConfigListInput(event *tcell.EventKey) *tcell.Eve
 		}
 	}
 	return event
+}
+
+func (cm *ConfigManager) activateSelectedConfig() {
+	cm.mu.Lock()
+	idx := cm.selectedIdx
+	files := cm.files
+	cm.mu.Unlock()
+
+	if idx < 0 || idx >= len(files) {
+		cm.statusText.SetText(i18n.T("cmgr.select_first"))
+		return
+	}
+
+	path := files[idx]
+	cm.statusText.SetText(i18n.T("cmgr.saving"))
+
+	go func() {
+		var err error
+		if cm.profileService != nil {
+			err = cm.profileService.SwitchProfile(path)
+		} else {
+			err = api.Client.ReloadConfig(path)
+		}
+
+		ui.Updater.PostUi(func() {
+			if err != nil {
+				cm.statusText.SetText(fmt.Sprintf(i18n.T("cmgr.save_fail"), tview.Escape(err.Error())))
+				return
+			}
+			cm.mu.Lock()
+			cm.currentConfig = path
+			cm.mu.Unlock()
+			cm.rebuildList()
+			cm.statusText.SetText(fmt.Sprintf("%s %s", i18n.T("cmgr.current_tag"), config.FriendlyPath(path)))
+		})
+	}()
 }
 
 func (cm *ConfigManager) Activate() {
@@ -464,6 +512,19 @@ func (cm *ConfigManager) deleteConfig(path, label string) {
 		cm.rebuildList()
 		cm.statusText.SetText(fmt.Sprintf(i18n.T("cmgr.deleted"), tview.Escape(label)))
 		log.Printf("[configmgr] deleted config: %s", path)
+	})
+}
+
+// UpdateTexts refreshes all localized labels on the config manager page
+func (cm *ConfigManager) UpdateTexts() {
+	ui.Updater.PostUi(func() {
+		if cm.configList != nil {
+			cm.configList.SetTitle(fmt.Sprintf(" %s ", i18n.T("cmgr.file_list")))
+		}
+		if cm.statusText != nil {
+			cm.statusText.SetText(i18n.T("cmgr.status_ready"))
+		}
+		cm.rebuildList()
 	})
 }
 

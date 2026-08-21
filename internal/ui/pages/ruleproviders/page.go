@@ -6,9 +6,10 @@ import (
 	"strings"
 	"sync"
 
-	"mihomoTui/internal/api"
-	"mihomoTui/internal/config"
 	"mihomoTui/internal/i18n"
+	"mihomoTui/internal/models"
+	"mihomoTui/internal/repository"
+	"mihomoTui/internal/service"
 	"mihomoTui/internal/ui"
 	"mihomoTui/internal/ui/components"
 
@@ -43,7 +44,8 @@ var quickPresets = []QuickPreset{
 type Page struct {
 	*tview.Flex
 
-	providers []config.RuleProviderEntry
+	providerService *service.ProviderService
+	providers       []models.RuleProviderEntry
 
 	subList    *tview.List
 	detailView *tview.TextView
@@ -64,13 +66,29 @@ type Page struct {
 	pasteImportForm *tview.Flex
 }
 
-func NewPage() *Page {
+func NewPage(providerService ...*service.ProviderService) *Page {
+	var svc *service.ProviderService
+	if len(providerService) > 0 {
+		svc = providerService[0]
+	}
 	page := &Page{
-		Flex:          tview.NewFlex(),
-		selectedIndex: -1,
+		Flex:            tview.NewFlex(),
+		providerService: svc,
+		selectedIndex:   -1,
 	}
 	page.setupUI()
 	return page
+}
+
+func (p *Page) SetProviderService(providerService *service.ProviderService) {
+	p.providerService = providerService
+}
+
+func (p *Page) getProviderService() *service.ProviderService {
+	if p.providerService != nil {
+		return p.providerService
+	}
+	return service.NewProviderService(repository.NewLocalYAMLDriver(), nil)
 }
 
 func (p *Page) setupUI() {
@@ -134,6 +152,13 @@ func (p *Page) setupUI() {
 	p.importForm.SetButtonsAlign(tview.AlignCenter)
 	p.importForm.SetButtonStyle(tcell.StyleDefault.Background(ui.ThemeButtonBg).Foreground(tcell.ColorWhite))
 	p.importForm.SetButtonActivatedStyle(tcell.StyleDefault.Background(ui.ThemeButtonFocusBg).Foreground(tcell.ColorBlack))
+	p.importForm.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			p.onCancelImport()
+			return nil
+		}
+		return event
+	})
 
 	p.setupPasteImport()
 
@@ -179,7 +204,7 @@ func (p *Page) setupSubList() {
 	p.subList.SetChangedFunc(func(idx int, _ string, _ string, _ rune) {
 		p.mu.Lock()
 		p.selectedIndex = idx
-		var rp *config.RuleProviderEntry
+		var rp *models.RuleProviderEntry
 		if idx >= 0 && idx < len(p.providers) {
 			rp = &p.providers[idx]
 		}
@@ -236,6 +261,7 @@ func (p *Page) onCancelImport() {
 	p.showInput = false
 	p.mu.Unlock()
 	p.RemoveItem(p.importForm)
+	ui.Updater.SetFocus(p.subList)
 }
 
 func (p *Page) onImportClicked() {
@@ -324,17 +350,13 @@ func (p *Page) hideQuickImport() {
 }
 
 func (p *Page) importFromURL(name, url, behavior string, interval int) {
-	configPath, err := config.AddRuleProviderToConfig(name, url, behavior, interval)
+	err := p.getProviderService().AddRuleProvider(name, url, behavior, interval)
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("rp.import_fail"), err))
 		return
 	}
 
-	if err := api.Client.ReloadConfig(configPath); err != nil {
-		log.Printf("[ruleproviders] hot-reload failed: %v", err)
-	}
-
-	providers, err := config.GetRuleProvidersFromConfig()
+	providers, err := p.getProviderService().GetRuleProviders()
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("rp.config_read_fail"), err))
 		return
@@ -351,6 +373,7 @@ func (p *Page) importFromURL(name, url, behavior string, interval int) {
 		}
 		p.updateSubList()
 		p.status.SetText(fmt.Sprintf(i18n.T("rp.import_ok"), name))
+		ui.Updater.SetFocus(p.subList)
 	})
 }
 
@@ -369,18 +392,14 @@ func (p *Page) deleteSelected() {
 	})
 }
 
-func (p *Page) deleteProvider(rp config.RuleProviderEntry) {
-	configPath, err := config.DeleteRuleProviderFromConfig(rp.Name)
+func (p *Page) deleteProvider(rp models.RuleProviderEntry) {
+	err := p.getProviderService().DeleteRuleProvider(rp.Name)
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("rp.del_fail"), err))
 		return
 	}
 
-	if err := api.Client.ReloadConfig(configPath); err != nil {
-		log.Printf("[ruleproviders] hot-reload failed: %v", err)
-	}
-
-	providers, err := config.GetRuleProvidersFromConfig()
+	providers, err := p.getProviderService().GetRuleProviders()
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("rp.config_read_fail"), err))
 		return
@@ -392,19 +411,22 @@ func (p *Page) deleteProvider(rp config.RuleProviderEntry) {
 		p.mu.Unlock()
 		p.updateSubList()
 		p.status.SetText(fmt.Sprintf(i18n.T("rp.del_ok"), rp.Name))
+		ui.Updater.SetFocus(p.subList)
 	})
 }
 
 func (p *Page) refresh() {
-	providers, err := config.GetRuleProvidersFromConfig()
+	providers, err := p.getProviderService().GetRuleProviders()
 	if err != nil {
 		p.showError(fmt.Sprintf(i18n.T("rp.config_read_fail"), err))
+		ui.Updater.PostUi(func() {
+			p.mu.Lock()
+			p.providers = nil
+			p.mu.Unlock()
+			p.updateSubList()
+			p.detailView.SetText("")
+		})
 		return
-	}
-
-	apiProviders, apiErr := api.Client.GetRuleProviders()
-	if apiErr != nil {
-		log.Printf("[ruleproviders] API GetRuleProviders failed: %v", apiErr)
 	}
 
 	ui.Updater.PostUi(func() {
@@ -412,7 +434,6 @@ func (p *Page) refresh() {
 		p.providers = providers
 		p.mu.Unlock()
 		p.updateSubList()
-		_ = apiProviders
 		p.status.SetText(i18n.T("rp.refreshed"))
 	})
 }
@@ -444,7 +465,7 @@ func (p *Page) updateSubList() {
 	}
 }
 
-func (p *Page) showDetail(rp config.RuleProviderEntry) {
+func (p *Page) showDetail(rp models.RuleProviderEntry) {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf(i18n.T("rp.detail_name"), ui.StripFlagEmoji(rp.Name)))
 	b.WriteString(fmt.Sprintf(i18n.T("rp.detail_behavior"), rp.Behavior))
@@ -571,7 +592,7 @@ func (p *Page) doProcessPasteImportYAML(text string) {
 
 	p.showStatus(fmt.Sprintf(i18n.T("rp.importing_count"), len(rawProviders)))
 
-	var batch []config.RuleProviderBatchEntry
+	var batch []models.RuleProviderEntry
 	var errs []string
 
 	for name, def := range rawProviders {
@@ -583,7 +604,7 @@ func (p *Page) doProcessPasteImportYAML(text string) {
 		if interval <= 0 {
 			interval = 86400
 		}
-		batch = append(batch, config.RuleProviderBatchEntry{
+		batch = append(batch, models.RuleProviderEntry{
 			Name:     name,
 			URL:      def.URL,
 			Behavior: def.Behavior,
@@ -600,16 +621,10 @@ func (p *Page) doProcessPasteImportYAML(text string) {
 		return
 	}
 
-	cp, err := config.BatchAddRuleProvidersToConfig(batch)
+	_, err := p.getProviderService().BatchAddRuleProviders(batch)
 	if err != nil {
 		log.Printf("[ruleproviders] batch import failed: %v", err)
 		p.showStatus(fmt.Sprintf(i18n.T("rp.import_fail"), err))
-		return
-	}
-
-	if err := api.Client.ReloadConfig(cp); err != nil {
-		log.Printf("[ruleproviders] hot-reload failed: %v", err)
-		p.showStatus(fmt.Sprintf(i18n.T("rp.reload_fail"), err))
 		return
 	}
 
@@ -619,12 +634,29 @@ func (p *Page) doProcessPasteImportYAML(text string) {
 		log.Printf("[ruleproviders] paste import skipped: %v", errs)
 	}
 
-	providersList, _ := config.GetRuleProvidersFromConfig()
+	providersList, _ := p.getProviderService().GetRuleProviders()
 	ui.Updater.PostUi(func() {
 		p.mu.Lock()
 		p.providers = providersList
 		p.mu.Unlock()
 		p.updateSubList()
 		p.status.SetText(msg)
+	})
+}
+
+// UpdateTexts refreshes all localized labels on the rule providers page
+func (p *Page) UpdateTexts() {
+	ui.Updater.PostUi(func() {
+		p.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.title")))
+		if p.subList != nil {
+			p.subList.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.list_title")))
+		}
+		if p.detailView != nil {
+			p.detailView.SetTitle(fmt.Sprintf(" %s ", i18n.T("rp.detail_title")))
+		}
+		if p.status != nil {
+			p.status.SetText(i18n.T("rp.status_ready"))
+		}
+		p.updateSubList()
 	})
 }

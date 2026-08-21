@@ -1,16 +1,21 @@
 package app
 
 import (
+	"sync"
+
 	"mihomoTui/internal/api"
 	"mihomoTui/internal/config"
+	"mihomoTui/internal/events"
 	"mihomoTui/internal/i18n"
+	"mihomoTui/internal/repository"
+	"mihomoTui/internal/service"
 	"mihomoTui/internal/subscription"
 	"mihomoTui/internal/ui"
 	"mihomoTui/internal/ui/components"
 	"mihomoTui/internal/ui/pages"
+	proxygroupspage "mihomoTui/internal/ui/pages/proxygroups"
 	rproviders "mihomoTui/internal/ui/pages/ruleproviders"
 	subscriptionspage "mihomoTui/internal/ui/pages/subscriptions"
-	"sync"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -28,6 +33,13 @@ type App struct {
 
 	configManager *config.Manager
 	subMgr        *subscription.Manager
+
+	eventBus        *events.Bus
+	yamlDriver      *repository.LocalYAMLDriver
+	ruleService     *service.RuleService
+	groupService    *service.ProxyGroupService
+	providerService *service.ProviderService
+	profileService  *service.ProfileService
 
 	header    *components.Header
 	navBar    *components.NavBar
@@ -101,6 +113,17 @@ func (a *App) Initialize() error {
 	api.InitClient(cfg.BaseURL, cfg.Secret)
 
 	a.subMgr = subscription.NewManager()
+	a.eventBus = events.NewBus()
+	a.yamlDriver = repository.NewLocalYAMLDriver()
+	a.ruleService = service.NewRuleService(a.yamlDriver)
+	a.groupService = service.NewProxyGroupService(a.yamlDriver)
+	a.providerService = service.NewProviderService(a.yamlDriver, a.subMgr)
+	a.profileService = service.NewProfileService(a.yamlDriver, a.eventBus)
+
+	// Subscribe to language changes for dynamic UI re-render
+	a.eventBus.Subscribe(events.TopicLanguageChanged, func(event interface{}) {
+		a.handleLanguageChanged()
+	})
 
 	// Initialize UI components
 	a.setupUI()
@@ -132,7 +155,7 @@ func (a *App) setupUI() {
 	// Create components
 	a.header = components.NewHeader(a.appName, a.appVersion)
 	a.navBar = components.NewNavBar(a.pageInfo)
-	a.statusBar = components.NewStatusBar()
+	a.statusBar = components.NewStatusBar(a.eventBus)
 
 	// Create pages
 	a.pages = tview.NewPages()
@@ -177,57 +200,55 @@ func (a *App) setupUI() {
 		return false
 	})
 
-	// Set StatusBar reference in UI Updater
-	ui.Updater.SetStatusBar(a.statusBar)
 	ui.Updater.SetOverlayPages(a.rootPages)
 }
 
 // setupPages initializes all pages
 func (a *App) setupPages() {
 	// Dashboard page
-	dashboardPage := pages.NewDashboard()
+	dashboardPage := pages.NewDashboardPage()
 	dashboardPage.SetInputCapture(dashboardPage.GetInputCapture())
 	a.pages.AddPage("dashboard", dashboardPage, true, true)
 	a.pageLifecycle["dashboard"] = dashboardPage
 
 	// Proxies page
-	proxiesPage := pages.NewProxies()
+	proxiesPage := pages.NewProxiesPage(a.eventBus)
 	// ProxiesPage sets its own InputCapture internally via initializeNavigation()
 	// which already includes Tab navigation and shortcuts
 	a.pages.AddPage("proxies", proxiesPage, true, false)
 	a.pageLifecycle["proxies"] = proxiesPage
 
 	// Connections page
-	connectionsPage := pages.NewConnections()
+	connectionsPage := pages.NewConnectionsPage()
 	connectionsPage.SetInputCapture(connectionsPage.GetInputCapture())
 	a.pages.AddPage("connections", connectionsPage, true, false)
 	a.pageLifecycle["connections"] = connectionsPage
 
 	// Logs page
-	logsPage := pages.NewLogs()
+	logsPage := pages.NewLogsPage()
 	a.pages.AddPage("logs", logsPage, true, false)
 	a.pageLifecycle["logs"] = logsPage
 
 	// Profiles page (formerly configmgr)
-	configMgrPage := pages.NewConfigManager()
+	configMgrPage := pages.NewConfigManager(a.profileService, a.eventBus)
 	a.pages.AddPage("configmgr", configMgrPage, true, false)
 	a.pageLifecycle["configmgr"] = configMgrPage
 
 	// Subscriptions page
-	subPage := subscriptionspage.NewPage(a.subMgr)
+	subPage := subscriptionspage.NewPage(a.providerService)
 	a.pages.AddPage("subscriptions", subPage, true, false)
 	a.pageLifecycle["subscriptions"] = subPage
 
 	// Unified Editor Page (Proxy Groups, Rules, Providers)
-	proxyGroupsPage := pages.NewProxyGroups()
-	rulesPage := pages.NewRules()
-	rpPage := rproviders.NewPage()
-	editorPage := pages.NewEditor(proxyGroupsPage, rulesPage, rpPage)
+	proxyGroupsPage := proxygroupspage.NewPage(a.groupService)
+	rulesPage := pages.NewRulesPage(a.ruleService)
+	rpPage := rproviders.NewPage(a.providerService)
+	editorPage := pages.NewEditorPage(proxyGroupsPage, rulesPage, rpPage)
 	a.pages.AddPage("editor", editorPage, true, false)
 	a.pageLifecycle["editor"] = editorPage
 
 	// Unified Settings page
-	settingsPage := pages.NewUnifiedSettings(a.configManager, a.appName, a.appVersion)
+	settingsPage := pages.NewUnifiedSettings(a.configManager, a.appName, a.appVersion, a.eventBus)
 	a.pages.AddPage("settings", settingsPage, true, false)
 	a.pageLifecycle["settings"] = settingsPage
 }
@@ -340,8 +361,31 @@ func (a *App) Stop() {
 		a.lifecycleStop = true
 		a.lifecycleMu.Unlock()
 
-		a.app.Suspend(func() {
-			a.app.Stop()
-		})
+		a.app.Stop()
+	})
+}
+
+// handleLanguageChanged updates all UI components and pages when language changes
+func (a *App) handleLanguageChanged() {
+	ui.Updater.PostUi(func() {
+		if a.header != nil {
+			a.header.UpdateTexts()
+		}
+		if a.navBar != nil {
+			a.pageInfo = ui.DefaultPageInfo()
+			a.navBar.UpdateItems(a.pageInfo)
+		}
+		if a.statusBar != nil {
+			a.statusBar.UpdateTexts()
+		}
+		if a.rootPages != nil {
+			a.helpPage = pages.NewHelpPage(a.pageInfo)
+			a.rootPages.AddPage("help", a.helpPage, true, a.showingHelp)
+		}
+		for _, page := range a.pageLifecycle {
+			if updater, ok := page.(interface{ UpdateTexts() }); ok {
+				updater.UpdateTexts()
+			}
+		}
 	})
 }

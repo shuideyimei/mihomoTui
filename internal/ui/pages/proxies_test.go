@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"mihomoTui/internal/events"
 	"mihomoTui/internal/models"
 	"mihomoTui/internal/ui"
 
@@ -16,10 +17,10 @@ import (
 // Compile-time check: verify ProxiesPage implements ActivatablePage.
 var _ ActivatablePage = (*ProxiesPage)(nil)
 
-func TestNewProxies_NonNil(t *testing.T) {
-	p := NewProxies()
+func TestNewProxiesPage_NonNil(t *testing.T) {
+	p := NewProxiesPage()
 	if p == nil {
-		t.Fatal("NewProxies() returned nil")
+		t.Fatal("NewProxiesPage() returned nil")
 	}
 	// Verify Flex layout exists (embedded via NewProxiesPage now returns *ProxiesPage)
 	if p.Flex == nil {
@@ -64,7 +65,7 @@ func TestProxies_ActivateDeactivate_GoroutineLeak(t *testing.T) {
 	// ui.Updater.UpdateUi → app.QueueUpdateDraw is processed.
 	go app.Run()
 
-	p := NewProxies()
+	p := NewProxiesPage()
 	before := runtime.NumGoroutine()
 
 	// Activate starts:
@@ -90,7 +91,7 @@ func TestProxies_ActivateDeactivate_GoroutineLeak(t *testing.T) {
 }
 
 func TestProxies_DeactivateNoPanic(t *testing.T) {
-	p := NewProxies()
+	p := NewProxiesPage()
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -103,7 +104,7 @@ func TestProxies_DeactivateNoPanic(t *testing.T) {
 }
 
 func TestProxies_UpdateGroupsListPreservesSelection(t *testing.T) {
-	p := NewProxies()
+	p := NewProxiesPage()
 	p.proxiesData = map[string]*models.Proxy{
 		"Proxy": {Name: "Proxy", Type: "Selector", All: []string{"A", "B"}, Now: "A"},
 		"Auto":  {Name: "Auto", Type: "URLTest", All: []string{"A", "B"}, Now: "B"},
@@ -121,7 +122,7 @@ func TestProxies_UpdateGroupsListPreservesSelection(t *testing.T) {
 }
 
 func TestProxies_UpdateGroupsListPreservesOffset(t *testing.T) {
-	p := NewProxies()
+	p := NewProxiesPage()
 	p.proxiesData = map[string]*models.Proxy{
 		"Proxy": {Name: "Proxy", Type: "Selector", All: []string{"A"}, Now: "A"},
 		"Auto":  {Name: "Auto", Type: "URLTest", All: []string{"A"}, Now: "A"},
@@ -139,7 +140,7 @@ func TestProxies_UpdateGroupsListPreservesOffset(t *testing.T) {
 }
 
 func TestProxies_UpdateGroupsListMovesSelectionToScrolledViewport(t *testing.T) {
-	p := NewProxies()
+	p := NewProxiesPage()
 	p.proxiesData = map[string]*models.Proxy{
 		"Proxy": {Name: "Proxy", Type: "Selector", All: []string{"A"}, Now: "A"},
 		"Auto":  {Name: "Auto", Type: "URLTest", All: []string{"A"}, Now: "A"},
@@ -159,7 +160,7 @@ func TestProxies_UpdateGroupsListMovesSelectionToScrolledViewport(t *testing.T) 
 }
 
 func TestProxies_UpdateNodesListContentPreservesSelection(t *testing.T) {
-	p := NewProxies()
+	p := NewProxiesPage()
 	p.proxyGroups = []*models.Proxy{
 		{Name: "Proxy", Type: "Selector", All: []string{"A", "B", "C"}, Now: "A"},
 	}
@@ -183,7 +184,7 @@ func TestProxies_UpdateNodesListContentPreservesSelection(t *testing.T) {
 }
 
 func TestProxies_UpdateNodesListContentPreservesOffset(t *testing.T) {
-	p := NewProxies()
+	p := NewProxiesPage()
 	p.proxyGroups = []*models.Proxy{
 		{Name: "Proxy", Type: "Selector", All: []string{"A", "B", "C", "D"}, Now: "A"},
 	}
@@ -206,7 +207,7 @@ func TestProxies_UpdateNodesListContentPreservesOffset(t *testing.T) {
 }
 
 func TestProxies_UpdateNodesListContentMovesSelectionToScrolledViewport(t *testing.T) {
-	p := NewProxies()
+	p := NewProxiesPage()
 	p.proxyGroups = []*models.Proxy{
 		{Name: "Proxy", Type: "Selector", All: []string{"A", "B", "C", "D"}, Now: "A"},
 	}
@@ -237,7 +238,7 @@ func TestProxies_UpdateNodesListContentMovesSelectionToScrolledViewport(t *testi
 }
 
 func TestProxies_SearchShowsEmptyStateAndCount(t *testing.T) {
-	p := NewProxies()
+	p := NewProxiesPage()
 	p.proxyGroups = []*models.Proxy{
 		{Name: "Proxy", Type: "Selector", All: []string{"Alpha", "Beta"}, Now: "Alpha"},
 	}
@@ -255,5 +256,64 @@ func TestProxies_SearchShowsEmptyStateAndCount(t *testing.T) {
 	}
 	if got := p.statusText.GetText(false); !strings.Contains(got, "0/2") {
 		t.Fatalf("expected search result count in status, got %q", got)
+	}
+}
+
+func TestProxies_EventBusModeChanged(t *testing.T) {
+	app := tview.NewApplication()
+	simScreen := tcell.NewSimulationScreen("")
+	if err := simScreen.Init(); err != nil {
+		t.Fatalf("failed to init simulation screen: %v", err)
+	}
+	app.SetScreen(simScreen)
+	ui.InitUpdater(app)
+	go app.Run()
+	defer app.Stop()
+
+	bus := events.NewBus()
+	p := NewProxiesPage(bus)
+
+	p.Activate()
+	time.Sleep(50 * time.Millisecond)
+
+	// Publish mode change to global
+	bus.Publish(events.TopicProxyModeChanged, events.ProxyModeChangedEvent{Mode: "global"})
+	time.Sleep(50 * time.Millisecond)
+
+	p.mutex.RLock()
+	mode := p.currentMode
+	p.mutex.RUnlock()
+
+	if mode != "global" {
+		t.Fatalf("expected mode global, got %q", mode)
+	}
+
+	done := make(chan struct{})
+	app.QueueUpdateDraw(func() {
+		if !strings.Contains(p.globalBtn.GetLabel(), "Global") {
+			t.Errorf("expected globalBtn label to contain Global, got %q", p.globalBtn.GetLabel())
+		}
+		close(done)
+	})
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for UI update")
+	}
+
+	// Deactivate and ensure unsubscribed
+	p.Deactivate()
+	time.Sleep(50 * time.Millisecond)
+
+	// Publish another mode change while deactivated
+	bus.Publish(events.TopicProxyModeChanged, events.ProxyModeChangedEvent{Mode: "direct"})
+	time.Sleep(50 * time.Millisecond)
+
+	p.mutex.RLock()
+	modeAfterDeactivate := p.currentMode
+	p.mutex.RUnlock()
+
+	if modeAfterDeactivate != "global" {
+		t.Fatalf("expected mode to remain global after deactivation, got %q", modeAfterDeactivate)
 	}
 }

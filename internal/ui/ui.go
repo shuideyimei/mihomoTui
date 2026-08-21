@@ -15,54 +15,38 @@ var (
 	Updater *UiUpdater
 )
 
-type statusBar interface {
-	GetCurrentMode() string
-	UpdateConfig(config interface{})
-}
-
 type UiUpdater struct {
+	mu       sync.RWMutex
 	app      *tview.Application
-	statBar  statusBar
 	overlays *tview.Pages
-
-	queueMu   sync.Mutex
-	queueCond *sync.Cond
-	queue     []func()
 }
 
 func InitUpdater(app *tview.Application) {
 	once.Do(func() {
-		Updater = &UiUpdater{
-			app: app,
-		}
-		Updater.queueCond = sync.NewCond(&Updater.queueMu)
-		go Updater.run()
+		Updater = &UiUpdater{}
 	})
-}
-
-func (u *UiUpdater) run() {
-	for {
-		u.queueMu.Lock()
-		for len(u.queue) == 0 {
-			u.queueCond.Wait()
-		}
-		fn := u.queue[0]
-		u.queue[0] = nil
-		u.queue = u.queue[1:]
-		u.queueMu.Unlock()
-		u.app.QueueUpdateDraw(fn)
+	if Updater != nil {
+		Updater.mu.Lock()
+		Updater.app = app
+		Updater.mu.Unlock()
 	}
 }
 
 func (u *UiUpdater) GetApp() *tview.Application {
+	if u == nil {
+		return nil
+	}
+	u.mu.RLock()
+	defer u.mu.RUnlock()
 	return u.app
 }
 
-func (u *UiUpdater) SetStatusBar(statusBar statusBar) {
-	u.statBar = statusBar
-}
-
 func (u *UiUpdater) SetOverlayPages(pages *tview.Pages) {
+	if u == nil {
+		return
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
 	u.overlays = pages
 }
 
@@ -119,37 +103,41 @@ func (u *UiUpdater) ConfirmDelete(label string, onConfirm func()) {
 	)
 }
 
-func (u *UiUpdater) GetCurrentMode() string {
-	if u.statBar != nil {
-		return u.statBar.GetCurrentMode()
-	}
-	return ""
-}
-
-func (u *UiUpdater) UpdateStatusBarConfig(config interface{}) {
-	if u.statBar != nil {
-		u.PostUi(func() {
-			u.statBar.UpdateConfig(config)
-		})
-	}
-}
-
 func (u *UiUpdater) UpdateUi(fn func()) {
-	u.app.QueueUpdateDraw(fn)
+	u.PostUi(fn)
 }
 
 // PostUi queues a UI update without blocking the caller.
 // Safe to call from any goroutine. The function will run on
 // the UI goroutine and the screen will be redrawn afterwards.
 func (u *UiUpdater) PostUi(fn func()) {
-	u.queueMu.Lock()
-	u.queue = append(u.queue, fn)
-	u.queueMu.Unlock()
-	u.queueCond.Signal()
+	if u == nil {
+		return
+	}
+	u.mu.RLock()
+	app := u.app
+	u.mu.RUnlock()
+	if app == nil {
+		return
+	}
+	go func() {
+		defer func() {
+			_ = recover()
+		}()
+		app.QueueUpdateDraw(fn)
+	}()
 }
 
 func (u *UiUpdater) SetFocus(focusable tview.Primitive) {
+	if u == nil || focusable == nil {
+		return
+	}
 	u.PostUi(func() {
-		u.app.SetFocus(focusable)
+		u.mu.RLock()
+		app := u.app
+		u.mu.RUnlock()
+		if app != nil {
+			app.SetFocus(focusable)
+		}
 	})
 }

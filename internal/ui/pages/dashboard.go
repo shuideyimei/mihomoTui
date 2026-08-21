@@ -117,12 +117,12 @@ func (d *DashboardPage) createControlButtons() {
 	// Create AllowLAN button
 	d.allowLanBtn = tview.NewButton(i18n.T("dash.allow_lan_off"))
 	components.StyleButton(d.allowLanBtn, components.ButtonNormal)
-	d.allowLanBtn.SetSelectedFunc(d.toggleAllowLan)
+	d.allowLanBtn.SetSelectedFunc(func() { go d.toggleAllowLan() })
 
 	// Create TUN button
 	d.tunBtn = tview.NewButton(i18n.T("dash.tun_off"))
 	components.StyleButton(d.tunBtn, components.ButtonNormal)
-	d.tunBtn.SetSelectedFunc(d.toggleTun)
+	d.tunBtn.SetSelectedFunc(func() { go d.toggleTun() })
 
 	// Initialize button navigation
 	d.buttonNav = components.NewFocusNavigator(d.allowLanBtn, d.tunBtn)
@@ -144,12 +144,12 @@ func (d *DashboardPage) createControlButtons() {
 
 	// Set up keyboard navigation for buttons
 	d.controlButtons.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyTAB, tcell.KeyRight:
-			d.buttonNav.Next()
-			return nil
-		case tcell.KeyBacktab, tcell.KeyLeft:
+		if event.Key() == tcell.KeyBacktab || (event.Key() == tcell.KeyTAB && event.Modifiers()&tcell.ModShift != 0) || event.Key() == tcell.KeyLeft {
 			d.buttonNav.Prev()
+			return nil
+		}
+		if event.Key() == tcell.KeyTAB || event.Key() == tcell.KeyRight {
+			d.buttonNav.Next()
 			return nil
 		}
 		return event
@@ -165,15 +165,36 @@ func (d *DashboardPage) createOperationStatus() {
 
 // Activate activates the dashboard page
 func (d *DashboardPage) Activate() {
+	d.Deactivate()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
 	d.startDataUpdates()
 }
 
 // Deactivate deactivates the dashboard page
 func (d *DashboardPage) Deactivate() {
-	if d.ctx != nil {
+	if d.cancel != nil {
 		d.cancel()
+		d.cancel = nil
 	}
+}
+
+// UpdateTexts refreshes all localized labels on the dashboard
+func (d *DashboardPage) UpdateTexts() {
+	ui.Updater.PostUi(func() {
+		d.SetTitle(fmt.Sprintf(" %s ", i18n.T("dash.title")))
+		if d.connectionsBox != nil {
+			d.connectionsBox.SetTitle(fmt.Sprintf(" %s ", i18n.T("dash.conn_stats")))
+		}
+		if d.systemInfoBox != nil {
+			d.systemInfoBox.SetTitle(fmt.Sprintf(" %s ", i18n.T("dash.sys_info")))
+		}
+		if d.controlButtons != nil {
+			d.controlButtons.SetTitle(fmt.Sprintf(" %s ", i18n.T("dash.control_panel")))
+		}
+		d.updateConnectionsDisplay()
+		d.updateSystemInfo()
+		d.updateControlButtons()
+	})
 }
 
 // startDataUpdates starts the real-time data update mechanism
@@ -195,6 +216,9 @@ func (d *DashboardPage) periodicUpdates() {
 		case <-d.ctx.Done():
 			return
 		case <-ticker.C:
+			if d.ctx.Err() != nil {
+				return
+			}
 			d.updateConnectionsData()
 			d.updateProxyStatusData()
 			d.updateSystemInfo()
@@ -353,11 +377,22 @@ func (d *DashboardPage) buildStatusText(config *models.Config) string {
 
 // showOperationStatus displays operation result status
 func (d *DashboardPage) showOperationStatus(message string) {
-	d.operationStatus.SetText(message)
+	ui.Updater.PostUi(func() {
+		d.operationStatus.SetText(message)
+	})
 
 	// Auto-clear status after 3 seconds
+	ctx := d.ctx
 	go func() {
-		time.Sleep(3 * time.Second)
+		if ctx != nil {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(3 * time.Second):
+			}
+		} else {
+			time.Sleep(3 * time.Second)
+		}
 		ui.Updater.PostUi(func() {
 			d.operationStatus.SetText(i18n.T("dash.status_ready"))
 		})
@@ -384,9 +419,7 @@ func (d *DashboardPage) updateSystemInfo() {
 
 // Stop stops all background updates
 func (d *DashboardPage) Stop() {
-	if d.cancel != nil {
-		d.cancel()
-	}
+	d.Deactivate()
 }
 
 // Refresh manually refreshes all data
@@ -418,6 +451,9 @@ func (d *DashboardPage) GetInputCapture() func(event *tcell.EventKey) *tcell.Eve
 // startStreamMemoryUsage starts streaming memory data
 func (d *DashboardPage) startStreamMemoryUsage() {
 	for {
+		if d.ctx == nil || d.ctx.Err() != nil {
+			return
+		}
 		select {
 		case <-d.ctx.Done():
 			return
@@ -428,6 +464,10 @@ func (d *DashboardPage) startStreamMemoryUsage() {
 				d.mutex.Unlock()
 			})
 
+			if d.ctx.Err() != nil {
+				return
+			}
+
 			if err != nil && err != context.Canceled {
 				d.mutex.Lock()
 				d.memoryData = nil
@@ -435,7 +475,7 @@ func (d *DashboardPage) startStreamMemoryUsage() {
 				select {
 				case <-d.ctx.Done():
 					return
-				case <-time.After(5 * time.Second):
+				case <-time.After(1 * time.Second):
 				}
 			}
 		}

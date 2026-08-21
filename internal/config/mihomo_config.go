@@ -3,10 +3,13 @@ package config
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+
+	"mihomoTui/internal/models"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,35 +35,12 @@ type MihomoConfig struct {
 	// Other fields are preserved as-is via the raw document
 }
 
-// ProxyProviderEntry is a single proxy-provider definition
-type ProxyProviderEntry struct {
-	Type        string `yaml:"type"`
-	URL         string `yaml:"url"`
-	Interval    int    `yaml:"interval"`
-	HealthCheck *struct {
-		Enable   bool   `yaml:"enable"`
-		URL      string `yaml:"url"`
-		Interval int    `yaml:"interval"`
-	} `yaml:"health-check,omitempty"`
-}
-
-// ProxyGroupEntry is a single proxy-group definition
-type ProxyGroupEntry struct {
-	Name     string   `yaml:"name"`
-	Type     string   `yaml:"type"`
-	Proxies  []string `yaml:"proxies,omitempty"`
-	Use      []string `yaml:"use,omitempty"`
-	URL      string   `yaml:"url,omitempty"`
-	Interval int      `yaml:"interval,omitempty"`
-	Filter   string   `yaml:"filter,omitempty"`
-}
-
-// ProviderInfo holds metadata about a mihomo proxy-provider read from config.
-type ProviderInfo struct {
-	Name     string
-	URL      string
-	Interval int
-}
+// Domain model aliases
+type ProxyProviderEntry = models.ProxyProviderEntry
+type ProxyGroupEntry = models.ProxyGroupEntry
+type ProviderInfo = models.ProviderInfo
+type RuleProviderEntry = models.RuleProviderEntry
+type RuleEntry = models.RuleDisplay
 
 // GetMihomoProxyProviders reads proxy-providers from the running mihomo config.yaml.
 func GetMihomoProxyProviders() ([]ProviderInfo, error) {
@@ -150,23 +130,60 @@ func FindMihomoConfigPath() string {
 	// Try to find from running mihomo process
 	paths := findMihomoProcessConfig()
 	for _, p := range paths {
-		configPath := filepath.Join(p, "config.yaml")
-		if fileExists(configPath) {
-			return configPath
+		if fileExists(p) && !isDir(p) {
+			if ValidateConfigFile(p) == nil {
+				return p
+			}
+		}
+		// If directory, check config files in directory
+		candidates := []string{
+			filepath.Join(p, "config.yaml"),
+			filepath.Join(p, "clash-verge.yaml"),
+			filepath.Join(p, "config.yml"),
+		}
+		for _, c := range candidates {
+			if fileExists(c) && ValidateConfigFile(c) == nil {
+				return c
+			}
 		}
 	}
+
 	// Fallback: check common locations
+	home := os.ExpandEnv("$HOME")
 	commonPaths := []string{
+		filepath.Join(home, "Library", "Application Support", "io.github.clash-verge-rev.clash-verge-rev", "clash-verge.yaml"),
+		filepath.Join(home, "Library", "Application Support", "clash-verge", "clash-verge.yaml"),
+		filepath.Join(home, "Library", "Application Support", "clash-verge", "config.yaml"),
+		filepath.Join(home, "Library", "Application Support", "Mihomo Party", "config.yaml"),
+		filepath.Join(home, "Library", "Application Support", "clash.meta", "config.yaml"),
+		filepath.Join(home, "Library", "Application Support", "ClashX", "config.yaml"),
+		filepath.Join(home, ".config", "mihomo", "config.yaml"),
+		filepath.Join(home, ".config", "clash", "config.yaml"),
 		"/opt/clashtui/mihomo/config/config.yaml",
 		"/etc/mihomo/config.yaml",
-		os.ExpandEnv("$HOME/.config/mihomo/config.yaml"),
+		"/etc/clash/config.yaml",
 	}
 	for _, p := range commonPaths {
-		if fileExists(p) {
+		if fileExists(p) && ValidateConfigFile(p) == nil {
 			return p
 		}
 	}
+
+	// Additional search in well known directories
+	all := FindAllConfigFiles()
+	if len(all) > 0 {
+		return all[0]
+	}
+
 	return ""
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
 }
 
 func explicitMihomoConfigPath() string {
@@ -183,7 +200,89 @@ func explicitMihomoConfigPath() string {
 
 // findMihomoProcessConfig returns config dirs from running mihomo processes
 func findMihomoProcessConfig() []string {
-	return findMihomoProcessConfigAt("/proc")
+	if _, err := os.Stat("/proc"); err == nil {
+		paths := findMihomoProcessConfigAt("/proc")
+		if len(paths) > 0 {
+			return paths
+		}
+	}
+	return findMihomoProcessConfigFromPS()
+}
+
+func findMihomoProcessConfigFromPS() []string {
+	cmd := exec.Command("ps", "-A", "-o", "command")
+	out, err := cmd.Output()
+	if err != nil {
+		cmd = exec.Command("ps", "-eo", "args")
+		out, err = cmd.Output()
+		if err != nil {
+			return nil
+		}
+	}
+	return parseProcessCmdlines(string(out))
+}
+
+func parseProcessCmdlines(output string) []string {
+	var paths []string
+	seen := make(map[string]bool)
+	addPath := func(raw string) {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			return
+		}
+		clean := filepath.Clean(raw)
+		if !seen[clean] {
+			seen[clean] = true
+			paths = append(paths, clean)
+		}
+	}
+
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		lower := strings.ToLower(line)
+		if !strings.Contains(lower, "mihomo") && !strings.Contains(lower, "clash") {
+			continue
+		}
+		if strings.Contains(lower, "grep") || strings.Contains(lower, "mihomotui") {
+			continue
+		}
+
+		for _, p := range extractProcessPaths(line) {
+			addPath(p)
+		}
+	}
+	return paths
+}
+
+func extractProcessPaths(line string) []string {
+	var results []string
+	flags := []string{"-f", "--config", "-config", "-d", "--directory", "-directory"}
+	for _, f := range flags {
+		if val := extractFlagValue(line, f); val != "" {
+			results = append(results, val)
+		}
+	}
+	return results
+}
+
+func extractFlagValue(line, flag string) string {
+	patterns := []string{" " + flag + " ", " " + flag + "="}
+	for _, p := range patterns {
+		idx := strings.Index(line, p)
+		if idx == -1 {
+			continue
+		}
+		val := strings.TrimSpace(line[idx+len(p):])
+		// Cut off at next flag beginning with " -"
+		if nextFlag := strings.Index(val, " -"); nextFlag != -1 {
+			val = strings.TrimSpace(val[:nextFlag])
+		}
+		val = strings.Trim(val, `"'`)
+		if val != "" {
+			return val
+		}
+	}
+	return ""
 }
 
 func findMihomoProcessConfigAt(procRoot string) []string {
@@ -843,6 +942,106 @@ func buildSelectGroup(providerName string) *yaml.Node {
 	return group
 }
 
+func AddLocalProviderToConfig(name, localPath string) (configPath string, err error) {
+	configMu.Lock()
+	defer configMu.Unlock()
+
+	configPath = FindMihomoConfigPath()
+	if configPath == "" {
+		return "", fmt.Errorf("找不到 mihomo 配置文件，请确认 mihomo 正在运行且配置文件存在")
+	}
+
+	doc, err := parseConfig(configPath)
+	if err != nil {
+		return "", err
+	}
+
+	modified := false
+	root := doc.Content[0]
+	indices := findKeysInMapping(root, "proxy-providers", "proxy-groups")
+	providersIdx, hasProviders := indices["proxy-providers"]
+	groupsIdx, hasGroups := indices["proxy-groups"]
+
+	if hasProviders {
+		providersMap := root.Content[providersIdx+1]
+		if providersMap.Kind == yaml.MappingNode {
+			found := false
+			for j := 0; j < len(providersMap.Content); j += 2 {
+				if providersMap.Content[j].Value == name {
+					providersMap.Content[j+1] = createLocalProviderValue(name, localPath)
+					found = true
+					modified = true
+					break
+				}
+			}
+			if !found {
+				providersMap.Content = append(providersMap.Content,
+					&yaml.Node{Kind: yaml.ScalarNode, Value: name, Tag: "!!str"},
+					createLocalProviderValue(name, localPath),
+				)
+				modified = true
+			}
+		}
+	} else {
+		providersValue := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		providersValue.Content = append(providersValue.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: name, Tag: "!!str"},
+			createLocalProviderValue(name, localPath),
+		)
+		root.Content = append(root.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: "proxy-providers", Tag: "!!str"},
+			providersValue,
+		)
+		modified = true
+	}
+
+	if wireProviderIntoSelectGroup(root, name, hasGroups, groupsIdx, &modified) {
+		// modified flag already set by the helper
+	} else if !hasGroups {
+		groupsList := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		groupsList.Content = append(groupsList.Content, buildSelectGroup(name))
+		root.Content = append(root.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: "proxy-groups", Tag: "!!str"},
+			groupsList,
+		)
+		modified = true
+	}
+
+	if !modified {
+		return configPath, nil
+	}
+
+	if err := writeConfig(doc, configPath); err != nil {
+		return "", err
+	}
+
+	return configPath, nil
+}
+
+func createLocalProviderValue(name, localPath string) *yaml.Node {
+	return &yaml.Node{
+		Kind: yaml.MappingNode,
+		Content: []*yaml.Node{
+			{Kind: yaml.ScalarNode, Value: "type", Tag: "!!str"},
+			{Kind: yaml.ScalarNode, Value: "file", Tag: "!!str"},
+			{Kind: yaml.ScalarNode, Value: "path", Tag: "!!str"},
+			{Kind: yaml.ScalarNode, Value: localPath, Tag: "!!str"},
+			{Kind: yaml.ScalarNode, Value: "health-check", Tag: "!!str"},
+			{
+				Kind: yaml.MappingNode,
+				Content: []*yaml.Node{
+					{Kind: yaml.ScalarNode, Value: "enable", Tag: "!!str"},
+					{Kind: yaml.ScalarNode, Value: "true", Tag: "!!bool"},
+					{Kind: yaml.ScalarNode, Value: "url", Tag: "!!str"},
+					{Kind: yaml.ScalarNode, Value: "https://www.gstatic.com/generate_204", Tag: "!!str"},
+					{Kind: yaml.ScalarNode, Value: "interval", Tag: "!!str"},
+					{Kind: yaml.ScalarNode, Value: "300", Tag: "!!int"},
+				},
+			},
+		},
+	}
+}
+
 func createProviderValue(name, url string) *yaml.Node {
 	return &yaml.Node{
 		Kind: yaml.MappingNode,
@@ -869,14 +1068,22 @@ func createProviderValue(name, url string) *yaml.Node {
 	}
 }
 
-// RuleProviderEntry is a single rule-provider definition
-type RuleProviderEntry struct {
-	Name     string
-	Type     string
-	Behavior string
-	URL      string
-	Path     string
-	Interval int
+// ParseRuleLine parses a comma-separated rule line into RuleEntry.
+func ParseRuleLine(line string) RuleEntry {
+	parts := strings.Split(line, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	if len(parts) == 0 {
+		return RuleEntry{}
+	}
+	if len(parts) == 1 {
+		return RuleEntry{Type: parts[0]}
+	}
+	if len(parts) == 2 {
+		return RuleEntry{Type: parts[0], Proxy: parts[1]}
+	}
+	return RuleEntry{Type: parts[0], Payload: parts[1], Proxy: parts[2]}
 }
 
 // createRuleProviderValue builds a yaml.MappingNode for a rule-provider entry.
@@ -952,6 +1159,8 @@ func GetRuleProvidersFromConfig() ([]RuleProviderEntry, error) {
 				if v, err := strconv.Atoi(val.Content[k+1].Value); err == nil {
 					entry.Interval = v
 				}
+			case "format":
+				entry.Format = val.Content[k+1].Value
 			}
 		}
 		entries = append(entries, entry)
@@ -1163,13 +1372,6 @@ func formatRuleLine(ruleType, payload, proxy string) string {
 // FormatRuleLine is the exported version of formatRuleLine.
 func FormatRuleLine(ruleType, payload, proxy string) string {
 	return formatRuleLine(ruleType, payload, proxy)
-}
-
-// RuleEntry is a single rule to be added in batch.
-type RuleEntry struct {
-	Type    string
-	Payload string
-	Proxy   string
 }
 
 // BatchAddRulesToConfig adds multiple rules in a single read-modify-write cycle.

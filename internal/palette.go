@@ -31,6 +31,9 @@ func (a *App) showCommandPalette() {
 		visible = visible[:0]
 		list.Clear()
 		for index, item := range a.pageInfo {
+			if item.Separator {
+				continue
+			}
 			label := item.Label()
 			if query != "" && !strings.Contains(strings.ToLower(label+" "+item.ID), query) {
 				continue
@@ -59,7 +62,7 @@ func (a *App) showCommandPalette() {
 	})
 	list.SetSelectedFunc(func(_ int, _ string, _ string, _ rune) { choose() })
 	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyBacktab {
+		if event.Key() == tcell.KeyBacktab || (event.Key() == tcell.KeyTab && event.Modifiers()&tcell.ModShift != 0) {
 			a.app.SetFocus(input)
 			return nil
 		}

@@ -8,8 +8,10 @@ import (
 	"sync/atomic"
 
 	"mihomoTui/internal/api"
-	"mihomoTui/internal/config"
 	"mihomoTui/internal/i18n"
+	"mihomoTui/internal/models"
+	"mihomoTui/internal/repository"
+	"mihomoTui/internal/service"
 	"mihomoTui/internal/ui"
 	"mihomoTui/internal/ui/components"
 
@@ -21,12 +23,14 @@ import (
 type RulesPage struct {
 	*tview.Flex
 
+	ruleService *service.RuleService
+
 	table       *tview.Table
 	searchInput *tview.InputField
 	statusText  *tview.TextView
 	actionBar   *tview.Flex
 
-	rules      []RuleDisplay
+	rules      []models.RuleDisplay
 	filterText string
 
 	addForm        *tview.Form
@@ -46,13 +50,6 @@ type RulesPage struct {
 	refreshId int64 // incremented on each refresh() call to discard stale responses
 }
 
-// RuleDisplay is a display-ready rule with formatted fields
-type RuleDisplay struct {
-	Type    string
-	Payload string
-	Proxy   string
-}
-
 var ruleTypes = []string{
 	"DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD",
 	"IP-CIDR", "IP-CIDR6", "IP-SUFFIX",
@@ -62,12 +59,28 @@ var ruleTypes = []string{
 }
 
 // NewRulesPage creates a new rules page
-func NewRulesPage() *RulesPage {
+func NewRulesPage(ruleService ...*service.RuleService) *RulesPage {
+	var svc *service.RuleService
+	if len(ruleService) > 0 {
+		svc = ruleService[0]
+	}
 	page := &RulesPage{
-		Flex: tview.NewFlex(),
+		Flex:        tview.NewFlex(),
+		ruleService: svc,
 	}
 	page.setupUI()
 	return page
+}
+
+func (r *RulesPage) SetRuleService(ruleService *service.RuleService) {
+	r.ruleService = ruleService
+}
+
+func (r *RulesPage) getRuleService() *service.RuleService {
+	if r.ruleService != nil {
+		return r.ruleService
+	}
+	return service.NewRuleService(repository.NewLocalYAMLDriver())
 }
 
 func (r *RulesPage) Activate() {
@@ -182,7 +195,7 @@ func (r *RulesPage) setupActionBar() {
 	deleteBtn := components.NewButton(i18n.T("rule.del_action"), components.ButtonDanger, func() { go r.deleteSelected() })
 	moveUpBtn := components.NewButton(i18n.T("rule.up_action"), components.ButtonNormal, func() { go r.moveUp() })
 	moveDownBtn := components.NewButton(i18n.T("rule.down_action"), components.ButtonNormal, func() { go r.moveDown() })
-	moveToBtn := components.NewButton(i18n.T("rule.move_action"), components.ButtonNormal, func() { go r.showMoveToDialog() })
+	moveToBtn := components.NewButton(i18n.T("rule.move_action"), components.ButtonNormal, r.showMoveToDialog)
 	refreshBtn := components.NewButton(i18n.T("rule.refresh_action"), components.ButtonNormal, func() { go r.refresh() })
 	pasteBtn := components.NewButton(i18n.T("rule.paste_action"), components.ButtonNormal, r.showPasteImport)
 
@@ -232,8 +245,10 @@ func (r *RulesPage) setupEventHandlers() {
 		case tcell.KeyEscape:
 			if r.searchInput.HasFocus() {
 				r.searchInput.SetText("")
+				ui.Updater.SetFocus(r.table)
+				return nil
 			}
-			return nil
+			return event
 		case tcell.KeyUp:
 			if event.Modifiers()&tcell.ModAlt != 0 && !r.searchInput.HasFocus() {
 				go r.moveUp()
@@ -270,7 +285,7 @@ func (r *RulesPage) setupEventHandlers() {
 			return nil
 		case 'm', 'M':
 			if !r.searchInput.HasFocus() {
-				go r.showMoveToDialog()
+				r.showMoveToDialog()
 			}
 			return nil
 		case '/':
@@ -392,7 +407,7 @@ func (r *RulesPage) processPasteImport() {
 func (r *RulesPage) doProcessPasteImport(text string) {
 	lines := strings.Split(text, "\n")
 
-	var rules []config.RuleEntry
+	var rules []models.RuleDisplay
 	var errs []string
 
 	for _, line := range lines {
@@ -413,7 +428,7 @@ func (r *RulesPage) doProcessPasteImport(text string) {
 				errs = append(errs, fmt.Sprintf(i18n.T("rule.invalid_line"), line))
 				continue
 			}
-			rules = append(rules, config.RuleEntry{Type: ruleType, Payload: "", Proxy: proxy})
+			rules = append(rules, models.RuleDisplay{Type: ruleType, Payload: "", Proxy: proxy})
 		} else if len(parts) == 3 {
 			ruleType := strings.TrimSpace(parts[0])
 			payload := strings.TrimSpace(parts[1])
@@ -422,7 +437,7 @@ func (r *RulesPage) doProcessPasteImport(text string) {
 				errs = append(errs, fmt.Sprintf(i18n.T("rule.invalid_line"), fmt.Sprintf("(missing fields) %s", line)))
 				continue
 			}
-			rules = append(rules, config.RuleEntry{Type: ruleType, Payload: payload, Proxy: proxy})
+			rules = append(rules, models.RuleDisplay{Type: ruleType, Payload: payload, Proxy: proxy})
 		} else {
 			errs = append(errs, fmt.Sprintf(i18n.T("rule.invalid_line"), fmt.Sprintf("(format error) %s", line)))
 			continue
@@ -441,22 +456,12 @@ func (r *RulesPage) doProcessPasteImport(text string) {
 		return
 	}
 
-	cp, err := config.BatchAddRulesToConfig(rules)
+	_, err := r.getRuleService().BatchAddRules(rules)
 	if err != nil {
 		log.Printf("[rules] batch import failed: %v", err)
 		ui.Updater.PostUi(func() {
 			r.showStatus(fmt.Sprintf(i18n.T("rule.import_fail"), err))
 		})
-		return
-	}
-
-	if err := api.Client.ReloadConfig(cp); err != nil {
-		log.Printf("[rules] hot-reload failed: %v", err)
-		// refresh() 内部也会尝试 ReloadConfig，给第二次机会
-		ui.Updater.PostUi(func() {
-			r.showStatus(fmt.Sprintf(i18n.T("rule.reload_fail"), err))
-		})
-		r.refresh()
 		return
 	}
 
@@ -497,18 +502,10 @@ func (r *RulesPage) onCancelAdd() {
 }
 
 func (r *RulesPage) saveRule(ruleType, payload, proxy string) {
-	configPath, err := config.AddRuleToConfig(ruleType, payload, proxy)
+	err := r.getRuleService().AddRule(ruleType, payload, proxy)
 	if err != nil {
 		ui.Updater.PostUi(func() {
 			r.showStatus(fmt.Sprintf(i18n.T("rule.add_fail"), err))
-		})
-		return
-	}
-
-	if err := api.Client.ReloadConfig(configPath); err != nil {
-		log.Printf("[rules] hot-reload failed: %v", err)
-		ui.Updater.PostUi(func() {
-			r.showStatus(fmt.Sprintf(i18n.T("rule.reload_fail"), err))
 		})
 		return
 	}
@@ -543,9 +540,9 @@ func (r *RulesPage) deleteSelected() {
 func (r *RulesPage) doDelete(ruleIdx int) {
 	// Use index-based deletion: API returns rules in config order,
 	// so ruleIdx directly maps to the config file's rules list index.
-	configRules, err := config.GetRulesFromConfig()
+	configRules, err := r.getRuleService().GetRules()
 	if err != nil {
-		log.Printf("[rules] GetRulesFromConfig failed: %v", err)
+		log.Printf("[rules] GetRules failed: %v", err)
 		ui.Updater.PostUi(func() {
 			r.showStatus(fmt.Sprintf(i18n.T("rule.read_fail"), err))
 		})
@@ -560,19 +557,11 @@ func (r *RulesPage) doDelete(ruleIdx int) {
 		return
 	}
 
-	configPath, err := config.DeleteRuleFromConfig(ruleIdx)
+	err = r.getRuleService().DeleteRule(ruleIdx)
 	if err != nil {
-		log.Printf("[rules] DeleteRuleFromConfig failed: %v", err)
+		log.Printf("[rules] DeleteRule failed: %v", err)
 		ui.Updater.PostUi(func() {
 			r.showStatus(fmt.Sprintf(i18n.T("rule.delete_fail"), err))
-		})
-		return
-	}
-
-	if err := api.Client.ReloadConfig(configPath); err != nil {
-		log.Printf("[rules] hot-reload failed: %v", err)
-		ui.Updater.PostUi(func() {
-			r.showStatus(fmt.Sprintf(i18n.T("rule.reload_fail"), err))
 		})
 		return
 	}
@@ -680,19 +669,11 @@ func (r *RulesPage) onMoveTo() {
 		r.hideMoveToDialog()
 
 		go func() {
-			configPath, err := config.MoveRuleToPosition(fromIdx, toIdx)
+			err := r.getRuleService().MoveRule(fromIdx, toIdx)
 			if err != nil {
-				log.Printf("[rules] MoveRuleToPosition failed: %v", err)
+				log.Printf("[rules] MoveRule failed: %v", err)
 				ui.Updater.PostUi(func() {
 					r.showStatus(fmt.Sprintf(i18n.T("rule.move_fail"), err))
-				})
-				return
-			}
-
-			if err := api.Client.ReloadConfig(configPath); err != nil {
-				log.Printf("[rules] hot-reload after move failed: %v", err)
-				ui.Updater.PostUi(func() {
-					r.showStatus(fmt.Sprintf(i18n.T("rule.reload_fail"), err))
 				})
 				return
 			}
@@ -703,19 +684,11 @@ func (r *RulesPage) onMoveTo() {
 }
 
 func (r *RulesPage) doMoveRule(fromIdx, toIdx int) {
-	configPath, err := config.MoveRuleInConfig(fromIdx, toIdx)
+	err := r.getRuleService().MoveRule(fromIdx, toIdx)
 	if err != nil {
-		log.Printf("[rules] MoveRuleInConfig failed: %v", err)
+		log.Printf("[rules] MoveRule failed: %v", err)
 		ui.Updater.PostUi(func() {
 			r.showStatus(fmt.Sprintf(i18n.T("rule.move_fail"), err))
-		})
-		return
-	}
-
-	if err := api.Client.ReloadConfig(configPath); err != nil {
-		log.Printf("[rules] hot-reload after move failed: %v", err)
-		ui.Updater.PostUi(func() {
-			r.showStatus(fmt.Sprintf(i18n.T("rule.reload_fail"), err))
 		})
 		return
 	}
@@ -766,9 +739,9 @@ func (r *RulesPage) refresh() {
 			return
 		}
 
-		var displayRules []RuleDisplay
+		var displayRules []models.RuleDisplay
 		for _, rule := range rulesData {
-			displayRules = append(displayRules, RuleDisplay{
+			displayRules = append(displayRules, models.RuleDisplay{
 				Type:    rule.Type,
 				Payload: rule.Payload,
 				Proxy:   rule.Proxy,
@@ -798,6 +771,7 @@ func (r *RulesPage) updateTable() {
 		r.table.SetCell(0, i, cell)
 	}
 
+	const maxDisplayRows = 500
 	row := 1
 	totalCount := len(r.rules)
 	visibleCount := 0
@@ -811,24 +785,26 @@ func (r *RulesPage) updateTable() {
 			}
 		}
 
-		idxCell := tview.NewTableCell(strconv.Itoa(idx + 1)).
-			SetTextColor(tcell.ColorGray).
-			SetAlign(tview.AlignCenter)
-		typeCell := tview.NewTableCell(rule.Type).
-			SetTextColor(tcell.ColorWhite).
-			SetAlign(tview.AlignCenter)
-		payloadCell := tview.NewTableCell(rule.Payload).
-			SetTextColor(tcell.ColorWhite)
-		proxyCell := tview.NewTableCell(rule.Proxy).
-			SetTextColor(tcell.ColorGray).
-			SetAlign(tview.AlignCenter)
-
-		r.table.SetCell(row, 0, idxCell)
-		r.table.SetCell(row, 1, typeCell)
-		r.table.SetCell(row, 2, payloadCell)
-		r.table.SetCell(row, 3, proxyCell)
-		row++
 		visibleCount++
+		if row <= maxDisplayRows {
+			idxCell := tview.NewTableCell(strconv.Itoa(idx + 1)).
+				SetTextColor(tcell.ColorGray).
+				SetAlign(tview.AlignCenter)
+			typeCell := tview.NewTableCell(rule.Type).
+				SetTextColor(tcell.ColorWhite).
+				SetAlign(tview.AlignCenter)
+			payloadCell := tview.NewTableCell(rule.Payload).
+				SetTextColor(tcell.ColorWhite)
+			proxyCell := tview.NewTableCell(rule.Proxy).
+				SetTextColor(tcell.ColorGray).
+				SetAlign(tview.AlignCenter)
+
+			r.table.SetCell(row, 0, idxCell)
+			r.table.SetCell(row, 1, typeCell)
+			r.table.SetCell(row, 2, payloadCell)
+			r.table.SetCell(row, 3, proxyCell)
+			row++
+		}
 	}
 
 	if visibleCount == 0 {
@@ -842,10 +818,38 @@ func (r *RulesPage) updateTable() {
 		if r.filterText != "" {
 			statusMsg = fmt.Sprintf("[green]%d/%d[-] %s", visibleCount, totalCount, i18n.T("rule.rows"))
 		}
+		if visibleCount > maxDisplayRows {
+			statusMsg += fmt.Sprintf(" [gray]("+i18n.T("common.showing_top")+")[-]", maxDisplayRows)
+		}
 		r.showStatus(statusMsg)
 	}
 }
 
 func (r *RulesPage) showStatus(message string) {
 	r.statusText.SetText(message)
+}
+
+// UpdateTexts refreshes all localized labels on the rules page
+func (r *RulesPage) UpdateTexts() {
+	ui.Updater.PostUi(func() {
+		r.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.title")))
+		if r.statusText != nil {
+			r.statusText.SetText(i18n.T("rule.status_ready"))
+		}
+		if r.searchInput != nil {
+			r.searchInput.SetLabel(i18n.T("rule.search_label"))
+			r.searchInput.SetPlaceholder(i18n.T("rule.search_placeholder"))
+			r.searchInput.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.filter")))
+		}
+		if r.table != nil {
+			r.table.SetTitle(fmt.Sprintf(" %s ", i18n.T("rule.list_title")))
+			headers := []string{i18n.T("rule.col_type"), i18n.T("rule.col_content"), i18n.T("rule.col_proxy")}
+			for i, header := range headers {
+				cell := r.table.GetCell(0, i)
+				if cell != nil {
+					cell.SetText(header)
+				}
+			}
+		}
+	})
 }

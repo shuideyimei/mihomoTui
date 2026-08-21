@@ -32,6 +32,7 @@ PROGRESS.md
 PROJECT_PLAN.md
 .github/prompts
 .omo/
+.pi/
 scripts/
 coverage.out
 dsh-usb-packaging/

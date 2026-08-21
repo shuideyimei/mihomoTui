@@ -28,23 +28,22 @@ func initLogsTest() {
 	})
 }
 
-func TestNewLogs_NonNil(t *testing.T) {
+func TestNewLogsPage_NonNil(t *testing.T) {
 	initLogsTest()
 
-	l := NewLogs()
+	l := NewLogsPage()
 	if l == nil {
-		t.Fatal("NewLogs() returned nil")
+		t.Fatal("NewLogsPage() returned nil")
 	}
-	// NewLogs now returns *LogsPage directly
 	if _, ok := interface{}(l).(ActivatablePage); !ok {
-		t.Fatal("NewLogs() does not implement ActivatablePage")
+		t.Fatal("NewLogsPage() does not implement ActivatablePage")
 	}
 }
 
 func TestLogs_ActivateDeactivate_StreamLifecycle(t *testing.T) {
 	initLogsTest()
 
-	page := NewLogs()
+	page := NewLogsPage()
 	baseline := runtime.NumGoroutine()
 
 	// Activate starts a background log stream goroutine.
@@ -102,7 +101,7 @@ func TestLogs_ActivateDeactivate_StreamLifecycle(t *testing.T) {
 func TestLogs_ClearDoesNotPanic(t *testing.T) {
 	initLogsTest()
 
-	page := NewLogs()
+	page := NewLogsPage()
 
 	// Activate first to get some internal state populated (addLog is called).
 	page.Activate()
@@ -132,7 +131,7 @@ func TestLogs_ClearDoesNotPanic(t *testing.T) {
 func TestLogs_TogglePause(t *testing.T) {
 	initLogsTest()
 
-	page := NewLogs()
+	page := NewLogsPage()
 
 	// Start the log stream.
 	page.Activate()

@@ -741,11 +741,7 @@ func (r *RulesPage) refresh() {
 
 		var displayRules []models.RuleDisplay
 		for _, rule := range rulesData {
-			displayRules = append(displayRules, models.RuleDisplay{
-				Type:    rule.Type,
-				Payload: rule.Payload,
-				Proxy:   rule.Proxy,
-			})
+			displayRules = append(displayRules, models.RuleDisplay(rule))
 		}
 
 		// Only apply the result if no newer refresh was started

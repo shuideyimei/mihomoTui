@@ -122,8 +122,8 @@ func (e *EditorPage) switchTab(index int) {
 		if a, ok := act.(ActivatablePage); ok {
 			a.Activate()
 		}
-		if p, ok := act.(tview.Primitive); ok {
-			ui.Updater.SetFocus(p)
+		if act != nil {
+			ui.Updater.SetFocus(act)
 		}
 	}
 }
@@ -159,8 +159,8 @@ func (e *EditorPage) Activate() {
 		if a, ok := act.(ActivatablePage); ok {
 			a.Activate()
 		}
-		if p, ok := act.(tview.Primitive); ok {
-			ui.Updater.SetFocus(p)
+		if act != nil {
+			ui.Updater.SetFocus(act)
 		}
 	}
 }

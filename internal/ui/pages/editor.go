@@ -98,6 +98,11 @@ func (e *EditorPage) setupUI() {
 	})
 }
 
+// SwitchTab switches to a specific subtab (0: proxygroups, 1: rules, 2: ruleproviders)
+func (e *EditorPage) SwitchTab(index int) {
+	e.switchTab(index)
+}
+
 func (e *EditorPage) switchTab(index int) {
 	if index < 0 || index >= len(e.tabs) {
 		return
